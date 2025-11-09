@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title th:text="${turista.id != null ? 'Editar Turista' : 'Nuevo Turista'}">Nuevo Turista</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body>
+<div class="container mt-4">
+    <h2 th:text="${turista.id != null ? 'Editar Turista' : 'Nuevo Turista'}">Nuevo Turista</h2>
+    <form th:action="@{/turistas/guardar}" th:object="${turista}" method="post">
+        <input type="hidden" th:field="*{id}" />
+        <div class="mb-3">
+            <label for="nombre" class="form-label">Nombre</label>
+            <input type="text" class="form-control" id="nombre" th:field="*{nombre}" required />
+        </div>
+        <div class="mb-3">
+            <label for="documentoIdentidad" class="form-label">Documento de Identidad</label>
+            <input type="text" class="form-control" id="documentoIdentidad" th:field="*{documentoIdentidad}" required />
+        </div>
+        <div class="mb-3">
+            <label for="nacionalidad" class="form-label">Nacionalidad</label>
+            <input type="text" class="form-control" id="nacionalidad" th:field="*{nacionalidad}" required />
+        </div>
+        <div class="mb-3">
+            <label for="telefono" class="form-label">Teléfono</label>
+            <input type="text" class="form-control" id="telefono" th:field="*{telefono}" />
+        </div>
+        <div class="mb-3">
+            <label for="email" class="form-label">Email</label>
+            <input type="email" class="form-control" id="email" th:field="*{email}" />
+        </div>
+        <button type="submit" class="btn btn-primary">Guardar</button>
+        <a href="/turistas" class="btn btn-secondary">Cancelar</a>
+    </form>
+</div>
+</body>
+</html>
