@@ -41,11 +41,45 @@ public class TuristaService {
         return turistaRepository.save(turista);
     }
 
-    // 👇 NUEVO: Método para buscar por nombre, apellido o DNI
+    // Método para buscar por nombre, apellido o DNI
     public List<Turista> buscarPorNombreODni(String query) {
-        return turistaRepository.findByNombresContainingIgnoreCaseOrApellidosContainingIgnoreCaseOrDniPasaporteContainingIgnoreCase(
-            query, query, query
-        );
+        return turistaRepository.buscarPorTermino(query);
+    }
+
+    // Método para obtener todos los turistas
+    public List<Turista> findAll() {
+        return turistaRepository.findAll();
+    }
+
+    // Método para obtener un turista por ID
+    public Turista findById(String id) {
+        if (id != null) {
+            return turistaRepository.findById(id).orElse(null);
+        }
+        return null;
+    }
+
+    // Método para actualizar un turista
+    public Turista update(Turista turista) {
+        // Verificar si el turista existe
+        if (turistaRepository.existsById(turista.getIdTurista())) {
+            // Verificar si el DNI/Pasaporte ya existe en otro turista
+            Turista existentePorDni = turistaRepository.findByDniPasaporte(turista.getDniPasaporte());
+            if (existentePorDni != null && !existentePorDni.getIdTurista().equals(turista.getIdTurista())) {
+                throw new RuntimeException("Ya existe otro cliente con este DNI/Pasaporte.");
+            }
+            return turistaRepository.save(turista);
+        }
+        return null; // No existe el turista
+    }
+
+    // Método para eliminar un turista
+    public boolean deleteById(String id) {
+        if (id != null && turistaRepository.existsById(id)) {
+            turistaRepository.deleteById(id);
+            return true;
+        }
+        return false; // No existe el turista
     }
 
 }

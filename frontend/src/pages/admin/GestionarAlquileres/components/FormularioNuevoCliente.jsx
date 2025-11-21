@@ -1,6 +1,6 @@
 // src/pages/admin/GestionarAlquileres/components/FormularioNuevoCliente.jsx
 import React, { useState } from 'react';
-import { X } from 'lucide-react';
+import { X, User, Users, CreditCard, Globe, Phone, Mail } from 'lucide-react';
 import api from '@/services/api';
 
 const FormularioNuevoCliente = ({ onClose, onSuccess }) => {
@@ -54,68 +54,92 @@ const FormularioNuevoCliente = ({ onClose, onSuccess }) => {
       <form onSubmit={handleCreateClient} className="space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700">Nombres</label>
-            <input
-              type="text"
-              name="nombres"
-              value={newClientData.nombres}
-              onChange={handleInputChange}
-              required
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            />
+            <label className="block text-sm font-medium text-gray-700 mb-1">Nombres</label>
+            <div className="relative">
+              <User className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" />
+              <input
+                type="text"
+                name="nombres"
+                value={newClientData.nombres}
+                onChange={handleInputChange}
+                required
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="Ingrese los nombres"
+              />
+            </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700">Apellidos</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Apellidos</label>
+            <div className="relative">
+              <Users className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" />
+              <input
+                type="text"
+                name="apellidos"
+                value={newClientData.apellidos}
+                onChange={handleInputChange}
+                required
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="Ingrese los apellidos"
+              />
+            </div>
+          </div>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">DNI/Pasaporte</label>
+          <div className="relative">
+            <CreditCard className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" />
             <input
               type="text"
-              name="apellidos"
-              value={newClientData.apellidos}
+              name="dniPasaporte"
+              value={newClientData.dniPasaporte}
               onChange={handleInputChange}
               required
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              placeholder="Ingrese DNI o Pasaporte"
             />
           </div>
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700">DNI/Pasaporte</label>
-          <input
-            type="text"
-            name="dniPasaporte"
-            value={newClientData.dniPasaporte}
-            onChange={handleInputChange}
-            required
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-          />
+          <label className="block text-sm font-medium text-gray-700 mb-1">Nacionalidad</label>
+          <div className="relative">
+            <Globe className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" />
+            <input
+              type="text"
+              name="nacionalidad"
+              value={newClientData.nacionalidad}
+              onChange={handleInputChange}
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              placeholder="Ej: Peruana, Colombiana, etc."
+            />
+          </div>
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700">Nacionalidad</label>
-          <input
-            type="text"
-            name="nacionalidad"
-            value={newClientData.nacionalidad}
-            onChange={handleInputChange}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-          />
+          <label className="block text-sm font-medium text-gray-700 mb-1">Teléfono</label>
+          <div className="relative">
+            <Phone className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" />
+            <input
+              type="tel"
+              name="telefono"
+              value={newClientData.telefono}
+              onChange={handleInputChange}
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              placeholder="+51 999 999 999"
+            />
+          </div>
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700">Teléfono</label>
-          <input
-            type="text"
-            name="telefono"
-            value={newClientData.telefono}
-            onChange={handleInputChange}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700">Email</label>
-          <input
-            type="email"
-            name="email"
-            value={newClientData.email}
-            onChange={handleInputChange}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-          />
+          <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+          <div className="relative">
+            <Mail className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" />
+            <input
+              type="email"
+              name="email"
+              value={newClientData.email}
+              onChange={handleInputChange}
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              placeholder="ejemplo@correo.com"
+            />
+          </div>
         </div>
         <div className="flex justify-end gap-2">
           <button

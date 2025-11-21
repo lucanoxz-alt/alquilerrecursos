@@ -18,9 +18,11 @@ public interface TuristaRepository extends JpaRepository<Turista, String> {
     @Query("SELECT MAX(t.idTurista) FROM Turista t")
     String findLastId();
 
-    // 👇 NUEVO: Método para búsqueda parcial
-    List<Turista> findByNombresContainingIgnoreCaseOrApellidosContainingIgnoreCaseOrDniPasaporteContainingIgnoreCase(
-        String nombres, String apellidos, String dniPasaporte
-    );
+    // Método para búsqueda parcial simplificado
+    @Query("SELECT t FROM Turista t WHERE " +
+           "LOWER(t.nombres) LIKE LOWER(CONCAT('%', :query, '%')) OR " +
+           "LOWER(t.apellidos) LIKE LOWER(CONCAT('%', :query, '%')) OR " +
+           "LOWER(t.dniPasaporte) LIKE LOWER(CONCAT('%', :query, '%'))")
+    List<Turista> buscarPorTermino(@org.springframework.data.repository.query.Param("query") String query);
   
 }

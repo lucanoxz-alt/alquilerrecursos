@@ -49,7 +49,7 @@ const AdminDashboard = ({ user }) => {
             </p>
           )}
         </div>
-        <div className={`p-3 rounded-lg bg-${color}-100`}>
+        <div className={`p-3 rounded-lg bg-${color}-100 border border-${color}-200 shadow-sm`}>
           <Icon className={`w-6 h-6 text-${color}-600`} />
         </div>
       </div>

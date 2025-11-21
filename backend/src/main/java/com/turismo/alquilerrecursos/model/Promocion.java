@@ -2,6 +2,7 @@ package com.turismo.alquilerrecursos.model;
 
 import jakarta.persistence.*;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 
 @Entity
 @Table(name = "PROMOCION")
@@ -23,6 +24,12 @@ public class Promocion {
     @Column(name = "porcentaje_desc", precision = 5, scale = 2, nullable = false)
     private BigDecimal porcentajeDesc;
 
+    @Column(name = "fecha_inicio", nullable = false)
+    private LocalDate fechaInicio;
+
+    @Column(name = "fecha_fin", nullable = false)
+    private LocalDate fechaFin;
+
     @Column(name = "activa", nullable = false)
     private Boolean activa;
 
@@ -42,6 +49,12 @@ public class Promocion {
 
     public BigDecimal getPorcentajeDesc() { return porcentajeDesc; }
     public void setPorcentajeDesc(BigDecimal porcentajeDesc) { this.porcentajeDesc = porcentajeDesc; }
+
+    public LocalDate getFechaInicio() { return fechaInicio; }
+    public void setFechaInicio(LocalDate fechaInicio) { this.fechaInicio = fechaInicio; }
+
+    public LocalDate getFechaFin() { return fechaFin; }
+    public void setFechaFin(LocalDate fechaFin) { this.fechaFin = fechaFin; }
 
     public Boolean getActiva() { return activa; }
     public void setActiva(Boolean activa) { this.activa = activa; }

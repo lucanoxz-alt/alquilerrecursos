@@ -1,7 +1,7 @@
 // src/components/LoginForm.jsx
 import React, { useState } from 'react';
 import { User, Lock, AlertCircle } from 'lucide-react';
-import api from '@/services/api'; // Usando el alias '@' definido en vite.config.js
+import api from '../../services/api';
 
 const LoginForm = ({ onLogin }) => {
   const [username, setUsername] = useState('');
@@ -21,20 +21,32 @@ const LoginForm = ({ onLogin }) => {
         password
       });
 
-      // El backend ahora devuelve SOLO el token como string
-      const token = response.data; // response.data es el token JWT puro
+      console.log('🔐 Respuesta del login:', response.data);
+
+      // Manejar diferentes formatos de respuesta del backend
+      let token;
+      let userData;
+
+      if (typeof response.data === 'string') {
+        // Si es solo el token como string
+        token = response.data;
+        userData = { username, token };
+      } else if (response.data.token) {
+        // Si es un objeto con token
+        token = response.data.token;
+        userData = { username, ...response.data };
+      } else {
+        throw new Error('Formato de respuesta inválido del servidor');
+      }
+
+      console.log('🔐 Token extraído:', token);
 
       // Guardar el token JWT en localStorage
       localStorage.setItem('authToken', token);
+      localStorage.setItem('userData', JSON.stringify(userData));
 
-      // Opcional: Puedes guardar más datos del usuario si los necesitas en otro lado
-      // Por ejemplo, si el backend también devuelve el username o rol:
-      // const userData = response.data; // Si devuelves un objeto { token, username, role }
-      // localStorage.setItem('userData', JSON.stringify({ username: userData.username, role: userData.role }));
-
-      // Llamar a la función `onLogin` (esto probablemente redirige o actualiza el estado de la app)
-      // Aquí puedes pasar el rol si lo necesitas, pero para guardar el token, ya está en localStorage
-      onLogin({ token }); // Ajusta según lo que necesite `onLogin`
+      // Llamar a la función onLogin
+      onLogin(userData);
 
     } catch (err) {
       console.error('Error de conexión o login:', err);

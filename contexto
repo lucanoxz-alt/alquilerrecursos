@@ -1,0 +1,62 @@
+Claro, Jean. Aquí tienes todo el contenido en formato de texto plano, sin tablas ni cuadros, manteniendo únicamente la información estructurada con claridad:
+
+---
+
+**Contexto del Sistema: Alquiler de Recursos Turísticos – Base para Desarrollo de Aplicación**
+
+Estamos desarrollando una aplicación completa de gestión de alquiler por horas de recursos turísticos, como cuatrimotos, motos acuáticas, bicicletas y equipos de kitesurf, en zonas costeras y rurales del norte del Perú. El sistema está dirigido a turistas nacionales y extranjeros, y será utilizado internamente por empleados (operarios), administradores y el jefe o gerente de la empresa.
+
+**Modelo de Base de Datos (SQL Server) – Actualizado y Listo**
+
+La base de datos AlquilerDeVehiculosParaPlaya ya ha sido estructurada con las siguientes mejoras clave:
+
+En la tabla RESERVA, el campo estado se ha renombrado a estadoreserva para diferenciarlo claramente del campo estadoalquiler en la tabla ALQUILER. Además, se han añadido nuevos atributos: id_promocion (clave foránea opcional a la tabla PROMOCION), que permite aplicar descuentos al momento de la reserva; y fecha_cancelacion, id_usuario_cancelacion y motivo_cancelacion, para garantizar una auditoría completa de las cancelaciones. El campo costo_total_estimado en RESERVA ya incluye el descuento correspondiente si se aplica una promoción.
+
+En la tabla ALQUILER, el campo estado se ha renombrado a estadoalquiler. Esta tabla mantiene los campos id_promocion e id_reserva (clave foránea opcional a RESERVA).
+
+El flujo de pagos se gestiona de la siguiente manera: en la reserva, se paga el 50% del total estimado mediante la tabla PAGO_RESERVA; en el alquiler, se paga el saldo restante (o el 100% si se trata de un alquiler directo sin reserva previa) mediante la tabla PAGO. En caso de cancelación de una reserva, se debe devolver el 50% pagado, y el sistema registra toda la trazabilidad necesaria para esta operación.
+
+Las promociones, como por ejemplo “10% de descuento por más de 3 horas de alquiler total”, pueden aplicarse tanto en reservas como en alquileres directos, asegurando coherencia financiera en todos los escenarios.
+
+**Requisitos Funcionales Clave del Sistema**
+
+1. Alquiler y reserva múltiple: un turista puede alquilar o reservar varios recursos en una sola transacción.  
+2. Gestión de estados: cada recurso tiene un estado que puede ser Disponible, Alquilado, Reservado o en Mantenimiento.  
+3. Roles de usuario:  
+   - Operario o Empleado: registra alquileres, reservas y pagos.  
+   - Administrador: gestiona recursos, usuarios y promociones.  
+   - Jefe: consulta reportes e ingresos, y puede cancelar reservas registrando un motivo.  
+4. Cancelación de reserva: el sistema registra quién canceló la reserva, cuándo y por qué motivo, y activa la lógica de devolución del 50% del monto pagado, implementada en el backend.  
+5. Reportes: el sistema debe permitir generar informes sobre el historial de alquileres por turista, los recursos más alquilados, la tasa de cancelación con sus motivos, y los ingresos diferenciando entre operaciones con y sin promociones.
+
+**Stack Tecnológico**
+
+El backend se desarrolla con Spring Boot en Java 21, utilizando JPA/Hibernate para el acceso a datos y JWT para la autenticación y autorización por roles (jefe, Administrador y Empleado). El frontend está construido con React (usando Vite) y se ejecuta en el puerto 5173, comunicándose con el backend alojado en localhost:8080. La base de datos es SQL Server. La autenticación se gestiona mediante login con JWT y control de acceso por roles.
+
+**Objetivo del Desarrollo**
+
+Desarrollar los módulos completos del backend y frontend que implementen la creación de reservas con promoción y cálculo automático del 50% del costo, la cancelación de reservas con devolución (con lógica en el servicio y actualización en la base de datos), consultas específicas para el jefe como “¿Quién alquiló qué recurso a un turista?”, validación de disponibilidad por horario para evitar dobles alquileres, una interfaz de usuario intuitiva para empleados y reportes detallados para el jefe.  
+
+Este sistema ya cuenta con una base de datos sólida, coherente y probada con datos de simulación reales. El siguiente paso es implementar la lógica de negocio en Spring Boot y la interfaz en React, siguiendo fielmente este modelo.
+
+**Modelo General del Negocio (Caso de Uso de Negocio)**
+
+Nombre del negocio: Gestión de Alquiler de Recursos Turísticos  
+Objetivo: Brindar un servicio eficiente de alquiler y reserva de recursos turísticos a turistas nacionales y extranjeros.
+
+Actores de negocio:
+
+- Turista: persona (cliente) que realiza reservas o alquileres de recursos turísticos.  
+- Empleado: encargado de registrar reservas, alquileres y pagos.  
+- Administrador: gestiona recursos, usuarios y promociones.  
+- Jefe o Gerente: supervisa la operación general y consulta reportes.
+
+Casos de uso de negocio:
+
+1. Gestionar alquiler de recursos turísticos: permite ofrecer, registrar y controlar el alquiler de vehículos o equipos a los turistas, con cálculo automático de costos y duración. Actor principal: Empleado y Turista.  
+2. Gestionar reservas: incluye la creación, confirmación y cancelación de reservas, aplicando las condiciones de promoción y las devoluciones correspondientes. Actor principal: Empleado y Turista.  
+3. Gestionar promociones: permite crear, activar o desactivar promociones según temporadas o condiciones específicas. Actor principal: Administrador.  
+4. Gestionar mantenimiento de datos: involucra la administración de recursos, tipos de recurso, usuarios y turistas. Actor principal: Administrador.  
+5. Consultar reportes de gestión: genera reportes sobre ingresos, recursos más alquilados y cancelaciones, para el análisis del jefe o administrador. Actor principal: Jefe y Administrador.
+
+---

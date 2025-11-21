@@ -1,0 +1,450 @@
+package com.turismo.alquilerrecursos.service;
+
+import com.turismo.alquilerrecursos.model.*;
+import com.turismo.alquilerrecursos.repository.*;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
+import java.util.*;
+import java.util.stream.Collectors;
+
+@Service
+public class ReporteService {
+
+    @Autowired
+    private AlquilerRepository alquilerRepository;
+    @Autowired
+    private ReservaRepository reservaRepository;
+    @Autowired
+    private RecursoRepository recursoRepository;
+    @Autowired
+    private TuristaRepository turistaRepository;
+    @Autowired
+    private DetalleAlquilerRepository detalleAlquilerRepository;
+    @Autowired
+    private DetalleReservaRepository detalleReservaRepository;
+    @Autowired
+    private PagoReservaRepository pagoReservaRepository;
+
+    /**
+     * Dashboard con métricas generales
+     */
+    public Map<String, Object> obtenerDashboard() {
+        Map<String, Object> dashboard = new HashMap<>();
+
+        // Métricas básicas
+        long totalReservas = reservaRepository.count();
+        long totalAlquileres = alquilerRepository.count();
+        long totalTuristas = turistaRepository.count();
+        long totalRecursos = recursoRepository.count();
+
+        // Reservas por estado
+        List<Reserva> todasReservas = reservaRepository.findAll();
+        Map<String, Long> reservasPorEstado = todasReservas.stream()
+            .collect(Collectors.groupingBy(Reserva::getEstadoreserva, Collectors.counting()));
+
+        // Alquileres activos
+        List<Alquiler> alquileresActivos = alquilerRepository.findByEstadoalquiler("Activo");
+
+        // Recursos disponibles
+        List<Recurso> recursosDisponibles = recursoRepository.findByEstado("Disponible");
+
+        // Ingresos del mes actual
+        BigDecimal ingresosMesActual = calcularIngresosMesActual();
+
+        dashboard.put("totalReservas", totalReservas);
+        dashboard.put("totalAlquileres", totalAlquileres);
+        dashboard.put("totalTuristas", totalTuristas);
+        dashboard.put("totalRecursos", totalRecursos);
+        dashboard.put("reservasPorEstado", reservasPorEstado);
+        dashboard.put("alquileresActivos", alquileresActivos.size());
+        dashboard.put("recursosDisponibles", recursosDisponibles.size());
+        dashboard.put("ingresosMesActual", ingresosMesActual);
+        dashboard.put("fechaGeneracion", LocalDateTime.now());
+
+        return dashboard;
+    }
+
+    /**
+     * Historial de alquileres por turista
+     */
+    public Map<String, Object> obtenerHistorialTurista(String idTurista) {
+        Map<String, Object> historial = new HashMap<>();
+
+        // Información del turista
+        if (idTurista == null) {
+            historial.put("error", "ID de turista es null");
+            return historial;
+        }
+        
+        Turista turista = turistaRepository.findById(idTurista).orElse(null);
+        if (turista == null) {
+            historial.put("error", "Turista no encontrado");
+            return historial;
+        }
+
+        // Alquileres del turista
+        List<Alquiler> alquileres = alquilerRepository.findAll().stream()
+            .filter(a -> idTurista.equals(a.getIdTurista()))
+            .collect(Collectors.toList());
+
+        // Reservas del turista
+        List<Reserva> reservas = reservaRepository.findByIdTurista(idTurista);
+
+        // Calcular estadísticas
+        BigDecimal totalGastado = alquileres.stream()
+            .map(Alquiler::getCostoTotal)
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        // Recursos más utilizados
+        Map<String, Long> recursosUtilizados = new HashMap<>();
+        for (Alquiler alquiler : alquileres) {
+            String idAlquiler = alquiler.getIdAlquiler();
+            if (idAlquiler != null) {
+                List<DetalleAlquiler> detalles = detalleAlquilerRepository.findByIdAlquiler(idAlquiler);
+                for (DetalleAlquiler detalle : detalles) {
+                    String idRecurso = detalle.getIdRecurso();
+                    if (idRecurso != null) {
+                        recursosUtilizados.put(idRecurso, recursosUtilizados.getOrDefault(idRecurso, 0L) + 1);
+                    }
+                }
+            }
+        }
+
+        historial.put("turista", turista);
+        historial.put("alquileres", alquileres);
+        historial.put("reservas", reservas);
+        historial.put("totalAlquileres", alquileres.size());
+        historial.put("totalReservas", reservas.size());
+        historial.put("totalGastado", totalGastado);
+        historial.put("recursosUtilizados", recursosUtilizados);
+
+        return historial;
+    }
+
+    /**
+     * Recursos más alquilados
+     */
+    public Map<String, Object> obtenerRecursosMasAlquilados() {
+        Map<String, Object> resultado = new HashMap<>();
+
+        // Obtener todos los detalles de alquileres
+        List<DetalleAlquiler> todosLosDetalles = detalleAlquilerRepository.findAll();
+
+        // Contar por recurso
+        Map<String, Long> conteoRecursos = todosLosDetalles.stream()
+            .collect(Collectors.groupingBy(DetalleAlquiler::getIdRecurso, Collectors.counting()));
+
+        // Ordenar por popularidad
+        List<Map.Entry<String, Long>> recursosPorPopularidad = conteoRecursos.entrySet().stream()
+            .sorted(Map.Entry.<String, Long>comparingByValue().reversed())
+            .collect(Collectors.toList());
+
+        // Agregar información de los recursos
+        List<Map<String, Object>> recursosDetallados = new ArrayList<>();
+        for (Map.Entry<String, Long> entry : recursosPorPopularidad) {
+            String idRecurso = entry.getKey();
+            Long cantidadAlquileres = entry.getValue();
+            
+            if (idRecurso != null) {
+                Recurso recurso = recursoRepository.findById(idRecurso).orElse(null);
+                if (recurso != null) {
+                    Map<String, Object> recursoInfo = new HashMap<>();
+                    recursoInfo.put("recurso", recurso);
+                    recursoInfo.put("cantidadAlquileres", cantidadAlquileres);
+                    recursoInfo.put("ingresoGenerado", calcularIngresosPorRecurso(idRecurso));
+                    recursosDetallados.add(recursoInfo);
+                }
+            }
+        }
+
+        resultado.put("recursosPopulares", recursosDetallados);
+        resultado.put("totalRecursos", conteoRecursos.size());
+        
+        return resultado;
+    }
+
+    /**
+     * Tasa de cancelación con motivos
+     */
+    public Map<String, Object> obtenerTasaCancelacion() {
+        Map<String, Object> resultado = new HashMap<>();
+
+        List<Reserva> todasReservas = reservaRepository.findAll();
+        List<Reserva> reservasCanceladas = reservaRepository.findByEstadoreserva("Cancelada");
+
+        // Calcular tasa de cancelación
+        double tasaCancelacion = todasReservas.size() > 0 ? 
+            (double) reservasCanceladas.size() / todasReservas.size() * 100 : 0;
+
+        // Agrupar motivos de cancelación
+        Map<String, Long> motivosCancelacion = reservasCanceladas.stream()
+            .filter(r -> r.getMotivoCancelacion() != null)
+            .collect(Collectors.groupingBy(Reserva::getMotivoCancelacion, Collectors.counting()));
+
+        resultado.put("totalReservas", todasReservas.size());
+        resultado.put("reservasCanceladas", reservasCanceladas.size());
+        resultado.put("tasaCancelacion", tasaCancelacion);
+        resultado.put("motivosCancelacion", motivosCancelacion);
+
+        return resultado;
+    }
+
+    /**
+     * Reporte de ingresos diferenciando operaciones con/sin promociones
+     */
+    public Map<String, Object> obtenerReporteIngresos(LocalDateTime fechaInicio, LocalDateTime fechaFin) {
+        Map<String, Object> resultado = new HashMap<>();
+
+        // Si no se proporcionan fechas, usar el mes actual
+        final LocalDateTime fechaInicioFinal;
+        final LocalDateTime fechaFinFinal;
+        
+        if (fechaInicio == null) {
+            fechaInicioFinal = LocalDateTime.now().withDayOfMonth(1).withHour(0).withMinute(0).withSecond(0);
+        } else {
+            fechaInicioFinal = fechaInicio;
+        }
+        if (fechaFin == null) {
+            fechaFinFinal = LocalDateTime.now();
+        } else {
+            fechaFinFinal = fechaFin;
+        }
+
+        // Obtener alquileres en el rango
+        List<Alquiler> alquileres = alquilerRepository.findAll().stream()
+            .filter(a -> a.getFechaHoraInicio().isAfter(fechaInicioFinal) && a.getFechaHoraInicio().isBefore(fechaFinFinal))
+            .collect(Collectors.toList());
+
+        // Separar por promociones
+        List<Alquiler> conPromocion = alquileres.stream()
+            .filter(a -> a.getIdPromocion() != null)
+            .collect(Collectors.toList());
+
+        List<Alquiler> sinPromocion = alquileres.stream()
+            .filter(a -> a.getIdPromocion() == null)
+            .collect(Collectors.toList());
+
+        BigDecimal ingresosConPromocion = conPromocion.stream()
+            .map(Alquiler::getCostoTotal)
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        BigDecimal ingresosSinPromocion = sinPromocion.stream()
+            .map(Alquiler::getCostoTotal)
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        // Ingresos de reservas
+        List<PagoReserva> pagosReservas = pagoReservaRepository.findAll().stream()
+            .filter(p -> p.getFechaPago().isAfter(fechaInicioFinal) && p.getFechaPago().isBefore(fechaFinFinal))
+            .collect(Collectors.toList());
+
+        BigDecimal ingresosReservas = pagosReservas.stream()
+            .map(PagoReserva::getMontoPago)
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        resultado.put("periodo", Map.of("inicio", fechaInicioFinal, "fin", fechaFinFinal));
+        resultado.put("alquileresConPromocion", conPromocion.size());
+        resultado.put("alquileresSinPromocion", sinPromocion.size());
+        resultado.put("ingresosConPromocion", ingresosConPromocion);
+        resultado.put("ingresosSinPromocion", ingresosSinPromocion);
+        resultado.put("ingresosReservas", ingresosReservas);
+        resultado.put("ingresoTotal", ingresosConPromocion.add(ingresosSinPromocion).add(ingresosReservas));
+
+        return resultado;
+    }
+
+    /**
+     * ¿Quién alquiló qué recurso a un turista?
+     */
+    public Map<String, Object> obtenerQuienAlquiloQue(String idTurista, String idRecurso) {
+        Map<String, Object> resultado = new HashMap<>();
+
+        List<Alquiler> alquileresConsulta = alquilerRepository.findAll();
+
+        // Filtrar por turista si se especifica
+        if (idTurista != null) {
+            alquileresConsulta = alquileresConsulta.stream()
+                .filter(a -> idTurista.equals(a.getIdTurista()))
+                .collect(Collectors.toList());
+        }
+
+        // Construir respuesta detallada
+        List<Map<String, Object>> detallesAlquileres = new ArrayList<>();
+        for (Alquiler alquiler : alquileresConsulta) {
+            String idAlquilerConsulta = alquiler.getIdAlquiler();
+            List<DetalleAlquiler> detalles = new ArrayList<>();
+            if (idAlquilerConsulta != null) {
+                detalles = detalleAlquilerRepository.findByIdAlquiler(idAlquilerConsulta);
+            }
+            
+            // Filtrar por recurso si se especifica
+            if (idRecurso != null) {
+                detalles = detalles.stream()
+                    .filter(d -> idRecurso.equals(d.getIdRecurso()))
+                    .collect(Collectors.toList());
+            }
+
+            if (!detalles.isEmpty()) {
+                String idTuristaAlquiler = alquiler.getIdTurista();
+                Turista turista = null;
+                if (idTuristaAlquiler != null) {
+                    turista = turistaRepository.findById(idTuristaAlquiler).orElse(null);
+                }
+                
+                Map<String, Object> detalleAlquiler = new HashMap<>();
+                detalleAlquiler.put("alquiler", alquiler);
+                detalleAlquiler.put("turista", turista);
+                detalleAlquiler.put("recursos", detalles.stream().map(d -> {
+                    String idRecursoDetalle = d.getIdRecurso();
+                    Recurso recurso = null;
+                    if (idRecursoDetalle != null) {
+                        recurso = recursoRepository.findById(idRecursoDetalle).orElse(null);
+                    }
+                    return Map.of("detalle", d, "recurso", recurso);
+                }).collect(Collectors.toList()));
+                
+                detallesAlquileres.add(detalleAlquiler);
+            }
+        }
+
+        resultado.put("consulta", Map.of("idTurista", idTurista, "idRecurso", idRecurso));
+        resultado.put("alquileres", detallesAlquileres);
+        resultado.put("totalResultados", detallesAlquileres.size());
+
+        return resultado;
+    }
+
+    /**
+     * Estado actual de recursos
+     */
+    public Map<String, Object> obtenerEstadoRecursos() {
+        Map<String, Object> resultado = new HashMap<>();
+
+        List<Recurso> todosRecursos = recursoRepository.findAll();
+        
+        Map<String, Long> recursosPorEstado = todosRecursos.stream()
+            .collect(Collectors.groupingBy(Recurso::getEstado, Collectors.counting()));
+
+        List<Recurso> recursosDisponibles = recursoRepository.findByEstado("Disponible");
+        List<Recurso> recursosAlquilados = recursoRepository.findByEstado("Alquilado");
+        List<Recurso> recursosReservados = recursoRepository.findByEstado("Reservado");
+
+        resultado.put("totalRecursos", todosRecursos.size());
+        resultado.put("recursosPorEstado", recursosPorEstado);
+        resultado.put("recursosDisponibles", recursosDisponibles);
+        resultado.put("recursosAlquilados", recursosAlquilados);
+        resultado.put("recursosReservados", recursosReservados);
+
+        return resultado;
+    }
+
+    /**
+     * Reservas pendientes
+     */
+    public Map<String, Object> obtenerReservasPendientes() {
+        Map<String, Object> resultado = new HashMap<>();
+
+        List<Reserva> reservasPendientes = reservaRepository.findByEstadoreserva("Pendiente");
+
+        // Agregar información de turistas y recursos
+        List<Map<String, Object>> reservasDetalladas = new ArrayList<>();
+        for (Reserva reserva : reservasPendientes) {
+            String idTurista = reserva.getIdTurista();
+            String idReserva = reserva.getIdReserva();
+            
+            Turista turista = null;
+            if (idTurista != null) {
+                turista = turistaRepository.findById(idTurista).orElse(null);
+            }
+            
+            List<DetalleReserva> detalles = new ArrayList<>();
+            if (idReserva != null) {
+                detalles = detalleReservaRepository.findByIdReserva(idReserva);
+            }
+            
+            Map<String, Object> reservaInfo = new HashMap<>();
+            reservaInfo.put("reserva", reserva);
+            reservaInfo.put("turista", turista);
+            reservaInfo.put("recursos", detalles.stream().map(d -> {
+                String idRecursoDetalle = d.getIdRecurso();
+                Recurso recurso = null;
+                if (idRecursoDetalle != null) {
+                    recurso = recursoRepository.findById(idRecursoDetalle).orElse(null);
+                }
+                return Map.of("detalle", d, "recurso", recurso);
+            }).collect(Collectors.toList()));
+            
+            reservasDetalladas.add(reservaInfo);
+        }
+
+        resultado.put("reservasPendientes", reservasDetalladas);
+        resultado.put("totalPendientes", reservasPendientes.size());
+
+        return resultado;
+    }
+
+    /**
+     * Reporte financiero detallado
+     */
+    public Map<String, Object> obtenerReporteFinanciero(String periodo) {
+        Map<String, Object> resultado = new HashMap<>();
+
+        LocalDateTime fechaInicio;
+        LocalDateTime fechaFin = LocalDateTime.now();
+
+        // Determinar periodo
+        switch (periodo != null ? periodo.toLowerCase() : "mes") {
+            case "semana":
+                fechaInicio = fechaFin.minus(7, ChronoUnit.DAYS);
+                break;
+            case "año":
+                fechaInicio = fechaFin.minus(1, ChronoUnit.YEARS);
+                break;
+            case "mes":
+            default:
+                fechaInicio = fechaFin.minus(1, ChronoUnit.MONTHS);
+                break;
+        }
+
+        // Obtener datos financieros
+        Map<String, Object> ingresos = obtenerReporteIngresos(fechaInicio, fechaFin);
+        
+        // Calcular métricas adicionales
+        List<Alquiler> alquileresVencidos = alquilerRepository.findAll().stream()
+            .filter(a -> "Activo".equals(a.getEstadoalquiler()) && 
+                        a.getFechaHoraInicio().plus(a.getDuracionHoras(), ChronoUnit.HOURS).isBefore(LocalDateTime.now()))
+            .collect(Collectors.toList());
+
+        resultado.put("periodo", periodo);
+        resultado.put("fechas", Map.of("inicio", fechaInicio, "fin", fechaFin));
+        resultado.putAll(ingresos);
+        resultado.put("alquileresVencidos", alquileresVencidos.size());
+        resultado.put("fechaGeneracion", LocalDateTime.now());
+
+        return resultado;
+    }
+
+    // Métodos auxiliares
+    private BigDecimal calcularIngresosMesActual() {
+        LocalDateTime inicioMes = LocalDateTime.now().withDayOfMonth(1).withHour(0).withMinute(0).withSecond(0);
+        LocalDateTime finMes = LocalDateTime.now();
+
+        return alquilerRepository.findAll().stream()
+            .filter(a -> a.getFechaHoraInicio().isAfter(inicioMes) && a.getFechaHoraInicio().isBefore(finMes))
+            .map(Alquiler::getCostoTotal)
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    private BigDecimal calcularIngresosPorRecurso(String idRecurso) {
+        List<DetalleAlquiler> detalles = detalleAlquilerRepository.findAll().stream()
+            .filter(d -> idRecurso.equals(d.getIdRecurso()))
+            .collect(Collectors.toList());
+
+        return detalles.stream()
+            .map(DetalleAlquiler::getCostoParcial)
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+}

@@ -1,238 +1,339 @@
 // src/pages/admin/ReportesPage.jsx
-import React, { useState } from 'react';
-import { FileText, Calendar, Filter, Download, BarChart3, Users, Package, TrendingUp } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { FileText, Calendar, Filter, Download, BarChart3, Users, Package, TrendingUp, RefreshCw, Eye, DollarSign, PieChart } from 'lucide-react';
+import { Card } from '../../components/ui/Card';
+import { Button } from '../../components/ui/Button';
 
 const ReportesPage = ({ user }) => {
-  const [reportType, setReportType] = useState('alquileres');
+  const [reportType, setReportType] = useState('dashboard');
   const [dateRange, setDateRange] = useState({ from: '', to: '' });
+  const [dashboardData, setDashboardData] = useState(null);
+  const [reporteData, setReporteData] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    cargarDashboard();
+  }, []);
+
+  useEffect(() => {
+    if (reportType !== 'dashboard') {
+      cargarReporte(reportType);
+    }
+  }, [reportType, dateRange]);
+
+  const cargarDashboard = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch('/api/reportes/dashboard');
+      const data = await response.json();
+      setDashboardData(data);
+      setError('');
+    } catch (error) {
+      console.error('Error cargando dashboard:', error);
+      setError('Error cargando dashboard');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const cargarReporte = async (tipo) => {
+    setLoading(true);
+    try {
+      let url = `/api/reportes/${tipo}`;
+      const params = new URLSearchParams();
+      
+      if (dateRange.from) params.append('fechaInicio', dateRange.from + 'T00:00:00');
+      if (dateRange.to) params.append('fechaFin', dateRange.to + 'T23:59:59');
+      
+      if (params.toString()) url += `?${params}`;
+      
+      const response = await fetch(url);
+      const data = await response.json();
+      setReporteData(data);
+      setError('');
+    } catch (error) {
+      console.error(`Error cargando reporte ${tipo}:`, error);
+      setError(`Error cargando reporte de ${tipo}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const exportarReporte = async (tipo) => {
+    try {
+      const data = reportType === 'dashboard' ? dashboardData : reporteData;
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `reporte_${tipo}_${new Date().toISOString().split('T')[0]}.json`;
+      a.click();
+    } catch (error) {
+      setError('Error exportando reporte');
+    }
+  };
 
   // Tipos de reporte disponibles
   const reportOptions = [
-    { id: 'alquileres', name: 'Alquileres', icon: Package },
-    { id: 'reservas', name: 'Reservas', icon: Calendar },
-    { id: 'ingresos', name: 'Ingresos', icon: TrendingUp },
-    { id: 'clientes', name: 'Clientes', icon: Users },
+    { id: 'dashboard', name: 'Dashboard', icon: BarChart3, descripcion: 'Vista general del sistema' },
+    { id: 'recursos-populares', name: 'Recursos Populares', icon: TrendingUp, descripcion: 'Recursos más alquilados' },
+    { id: 'tasa-cancelacion', name: 'Cancelaciones', icon: PieChart, descripcion: 'Tasa de cancelación' },
+    { id: 'ingresos', name: 'Ingresos', icon: DollarSign, descripcion: 'Reporte financiero' },
+    { id: 'estado-recursos', name: 'Estado Recursos', icon: Package, descripcion: 'Estado actual de recursos' },
+    { id: 'reservas-pendientes', name: 'Reservas Pendientes', icon: Calendar, descripcion: 'Reservas por confirmar' },
+    { id: 'quien-alquilo-que', name: 'Historial Detallado', icon: Users, descripcion: 'Quién alquiló qué' },
   ];
 
-  // Datos simulados para el reporte seleccionado
-  const reportData = {
-    alquileres: [
-      { id: 'ALQ001', cliente: 'Carlos Mendoza', recurso: 'Quad 400cc', fecha: '2025-10-20', monto: 450.00 },
-      { id: 'ALQ002', cliente: 'Ana Torres', recurso: 'Kayak Doble', fecha: '2025-10-25', monto: 180.00 },
-      { id: 'ALQ003', cliente: 'Luis Quispe', recurso: 'Bicicleta Montaña', fecha: '2025-10-28', monto: 60.00 },
-    ],
-    reservas: [
-      { id: 'RES001', cliente: 'María López', recurso: 'Stand Up Paddle', fecha: '2025-11-05', estado: 'Confirmada' },
-      { id: 'RES002', cliente: 'James Smith', recurso: 'Moto Acuática', fecha: '2025-11-10', estado: 'Pendiente' },
-    ],
-    ingresos: [
-      { mes: 'Octubre 2025', total: 8450.00, alquileres: 24 },
-      { mes: 'Septiembre 2025', total: 7200.00, alquileres: 21 },
-    ],
-    clientes: [
-      { nombre: 'Carlos Mendoza', alquileres: 3, ultimaVisita: '2025-10-28' },
-      { nombre: 'Ana Torres', alquileres: 2, ultimaVisita: '2025-10-25' },
-    ],
+  const renderDashboard = () => {
+    if (loading || !dashboardData) {
+      return (
+        <Card className="p-6">
+          <div className="flex items-center justify-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            <span className="ml-3">Cargando dashboard...</span>
+          </div>
+        </Card>
+      );
+    }
+
+    return (
+      <div className="space-y-6">
+        {/* Métricas principales */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <Card className="p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">Total Reservas</h3>
+              <Calendar className="w-6 h-6 text-blue-600" />
+            </div>
+            <div className="text-3xl font-bold text-gray-900 mb-2">
+              {dashboardData.totalReservas}
+            </div>
+            <p className="text-sm text-gray-600">Todas las reservas</p>
+          </Card>
+
+          <Card className="p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">Total Alquileres</h3>
+              <Package className="w-6 h-6 text-green-600" />
+            </div>
+            <div className="text-3xl font-bold text-gray-900 mb-2">
+              {dashboardData.totalAlquileres}
+            </div>
+            <p className="text-sm text-gray-600">Alquileres completados</p>
+          </Card>
+
+          <Card className="p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">Ingresos del Mes</h3>
+              <DollarSign className="w-6 h-6 text-yellow-600" />
+            </div>
+            <div className="text-3xl font-bold text-gray-900 mb-2">
+              S/. {dashboardData.ingresosMesActual?.toFixed(2) || '0.00'}
+            </div>
+            <p className="text-sm text-gray-600">Mes actual</p>
+          </Card>
+
+          <Card className="p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">Recursos Disponibles</h3>
+              <PieChart className="w-6 h-6 text-purple-600" />
+            </div>
+            <div className="text-3xl font-bold text-gray-900 mb-2">
+              {dashboardData.recursosDisponibles}
+            </div>
+            <p className="text-sm text-gray-600">De {dashboardData.totalRecursos} totales</p>
+          </Card>
+        </div>
+
+        {/* Estado de reservas */}
+        <Card className="p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Estado de Reservas</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {Object.entries(dashboardData.reservasPorEstado || {}).map(([estado, cantidad]) => (
+              <div key={estado} className="text-center p-4 border border-gray-200 rounded-lg">
+                <div className="text-2xl font-bold text-gray-900">{cantidad}</div>
+                <div className="text-sm text-gray-600 capitalize">{estado}</div>
+              </div>
+            ))}
+          </div>
+        </Card>
+
+        {/* Resumen operativo */}
+        <Card className="p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Resumen Operativo</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-lg font-semibold text-green-800">Alquileres Activos</div>
+                  <div className="text-2xl font-bold text-green-900">{dashboardData.alquileresActivos}</div>
+                </div>
+                <TrendingUp className="w-8 h-8 text-green-600" />
+              </div>
+            </div>
+            
+            <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-lg font-semibold text-blue-800">Turistas Registrados</div>
+                  <div className="text-2xl font-bold text-blue-900">{dashboardData.totalTuristas}</div>
+                </div>
+                <Users className="w-8 h-8 text-blue-600" />
+              </div>
+            </div>
+          </div>
+        </Card>
+      </div>
+    );
   };
 
-  const currentData = reportData[reportType] || [];
-
-  // Renderizar tabla según el tipo de reporte
-  const renderTable = () => {
-    if (reportType === 'alquileres') {
+  const renderReporteEspecifico = () => {
+    if (loading) {
       return (
-        <table className="w-full">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">ID Alquiler</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Cliente</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Recurso</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Fecha</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Monto (S/.)</th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {currentData.map((item, idx) => (
-              <tr key={idx} className="hover:bg-gray-50">
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{item.id}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.cliente}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.recurso}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.fecha}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.monto.toFixed(2)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <Card className="p-6">
+          <div className="flex items-center justify-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            <span className="ml-3">Generando reporte...</span>
+          </div>
+        </Card>
       );
     }
 
-    if (reportType === 'reservas') {
+    if (!reporteData) {
+      const opcion = reportOptions.find(r => r.id === reportType);
       return (
-        <table className="w-full">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">ID Reserva</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Cliente</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Recurso</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Fecha</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Estado</th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {currentData.map((item, idx) => (
-              <tr key={idx} className="hover:bg-gray-50">
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{item.id}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.cliente}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.recurso}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.fecha}</td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <span className="px-2 inline-flex text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
-                    {item.estado}
-                  </span>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <Card className="p-8 text-center">
+          <div className="text-gray-500">
+            <FileText className="w-16 h-16 mx-auto mb-4 text-gray-300" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">{opcion?.name}</h3>
+            <p className="text-sm text-gray-600 mb-4">{opcion?.descripcion}</p>
+            <Button onClick={() => cargarReporte(reportType)} className="flex items-center mx-auto">
+              <Eye className="w-4 h-4 mr-2" />
+              Generar Reporte
+            </Button>
+          </div>
+        </Card>
       );
     }
 
-    if (reportType === 'ingresos') {
-      return (
-        <table className="w-full">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Mes</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Total Ingresos (S/.)</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">N° Alquileres</th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {currentData.map((item, idx) => (
-              <tr key={idx} className="hover:bg-gray-50">
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{item.mes}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.total.toFixed(2)}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.alquileres}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      );
-    }
-
-    if (reportType === 'clientes') {
-      return (
-        <table className="w-full">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Cliente</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">N° Alquileres</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Última Visita</th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {currentData.map((item, idx) => (
-              <tr key={idx} className="hover:bg-gray-50">
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{item.nombre}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.alquileres}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.ultimaVisita}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      );
-    }
-
-    return null;
+    return (
+      <Card className="overflow-hidden">
+        <div className="p-6 border-b border-gray-100">
+          <h3 className="text-lg font-semibold text-gray-900">
+            {reportOptions.find(r => r.id === reportType)?.name} - Resultados
+          </h3>
+        </div>
+        <div className="p-6">
+          <pre className="bg-gray-50 p-4 rounded-lg overflow-auto text-sm">
+            {JSON.stringify(reporteData, null, 2)}
+          </pre>
+        </div>
+      </Card>
+    );
   };
+
 
   return (
     <div className="p-8">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Reportes</h1>
-        <p className="text-gray-600 mt-2">Genera y visualiza reportes de alquileres, reservas, ingresos y más.</p>
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">Reportes y Análisis</h1>
+            <p className="text-gray-600 mt-2">Visualiza estadísticas y genera reportes del sistema.</p>
+          </div>
+          
+          <div className="mt-4 md:mt-0 flex items-center space-x-3">
+            <Button 
+              variant="outline" 
+              onClick={reportType === 'dashboard' ? cargarDashboard : () => cargarReporte(reportType)}
+              className="flex items-center"
+            >
+              <RefreshCw className="w-4 h-4 mr-2" />
+              Actualizar
+            </Button>
+            
+            <Button 
+              variant="primary" 
+              onClick={() => exportarReporte(reportType)}
+              className="flex items-center"
+            >
+              <Download className="w-4 h-4 mr-2" />
+              Exportar
+            </Button>
+          </div>
+        </div>
       </div>
 
-      {/* Filtros superiores */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Tipo de Reporte</label>
-            <div className="space-y-2">
-              {reportOptions.map((opt) => {
-                const Icon = opt.icon;
-                return (
-                  <button
-                    key={opt.id}
-                    onClick={() => setReportType(opt.id)}
-                    className={`w-full flex items-center p-3 rounded-lg border text-left transition-colors ${
-                      reportType === opt.id
-                        ? 'border-blue-500 bg-blue-50 text-blue-700'
-                        : 'border-gray-200 hover:bg-gray-50'
-                    }`}
-                  >
-                    <Icon className="w-5 h-5 mr-3" />
-                    {opt.name}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-md p-4 mb-6">
+          <div className="text-red-800 text-sm">{error}</div>
+        </div>
+      )}
 
-          <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-gray-700 mb-2">Rango de Fechas</label>
-            <div className="flex space-x-4">
-              <div className="flex-1">
+      {/* Navegación de reportes */}
+      <Card className="p-4 mb-6">
+        <div className="flex flex-wrap gap-2">
+          {reportOptions.map((reporte) => {
+            const IconComponent = reporte.icono;
+            return (
+              <button
+                key={reporte.id}
+                onClick={() => setReportType(reporte.id)}
+                className={`flex items-center px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  reportType === reporte.id
+                    ? 'bg-blue-100 text-blue-700 border border-blue-200'
+                    : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                <IconComponent className="w-4 h-4 mr-2" />
+                {reporte.name}
+              </button>
+            );
+          })}
+        </div>
+      </Card>
+
+      {/* Filtros de fecha para reportes específicos */}
+      {reportType !== 'dashboard' && (
+        <Card className="p-4 mb-6">
+          <div className="flex flex-col md:flex-row md:items-center gap-4">
+            <div className="flex items-center space-x-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Fecha Inicio</label>
                 <input
                   type="date"
                   value={dateRange.from}
                   onChange={(e) => setDateRange({ ...dateRange, from: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500"
                 />
               </div>
-              <div className="flex-1">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Fecha Fin</label>
                 <input
                   type="date"
                   value={dateRange.to}
                   onChange={(e) => setDateRange({ ...dateRange, to: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500"
                 />
               </div>
             </div>
-
-            <div className="mt-4 flex space-x-3">
-              <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center">
+            <div className="flex items-end">
+              <Button 
+                onClick={() => cargarReporte(reportType)} 
+                className="flex items-center"
+              >
                 <Filter className="w-4 h-4 mr-2" />
-                Filtrar
-              </button>
-              <button className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center">
-                <Download className="w-4 h-4 mr-2" />
-                Exportar PDF
-              </button>
-              <button className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 flex items-center">
-                <BarChart3 className="w-4 h-4 mr-2" />
-                Ver Gráfico
-              </button>
+                Aplicar Filtros
+              </Button>
             </div>
           </div>
-        </div>
-      </div>
+        </Card>
+      )}
 
-      {/* Resultados del reporte */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-        <div className="p-6 border-b border-gray-100">
-          <h3 className="text-lg font-semibold text-gray-900">
-            {reportOptions.find(r => r.id === reportType)?.name} – Resultados
-          </h3>
-        </div>
-        <div className="overflow-x-auto">
-          {renderTable()}
-        </div>
-        {currentData.length === 0 && (
-          <div className="text-center py-12 text-gray-500">
-            No hay datos disponibles para este reporte.
-          </div>
-        )}
+      {/* Contenido del reporte */}
+      <div>
+        {reportType === 'dashboard' ? renderDashboard() : renderReporteEspecifico()}
       </div>
     </div>
   );

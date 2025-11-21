@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import Sidebar from "../../components/layout/Sidebar";
 import Dashboard from "../../components/Dashboard";
+import GestionarAlquileresPage from "../admin/GestionarAlquileres/GestionarAlquileresPage";
 
 // 👇 Componentes temporales (crearemos uno por cada módulo)
 const PlaceholderPage = ({ title }) => (
@@ -33,7 +34,7 @@ const MainDashboard = ({ onLogout }) => {
       case 'dashboard':
         return <Dashboard stats={stats} recentBookings={recentBookings} />;
       case 'alquileres':
-        return <PlaceholderPage title="Gestionar Alquileres" />;
+        return <GestionarAlquileresPage />;
       case 'reservas':
         return <PlaceholderPage title="Gestionar Reservas" />;
       case 'promociones':

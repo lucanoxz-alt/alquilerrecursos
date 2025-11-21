@@ -8,7 +8,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("/api/alquiler")
+@RequestMapping("/api/alquileres")
 public class AlquilerController {
 
     @Autowired
@@ -18,5 +18,11 @@ public class AlquilerController {
     public ResponseEntity<Alquiler> crearAlquiler(@RequestBody AlquilerRequest request) {
         Alquiler nuevoAlquiler = alquilerService.crearAlquiler(request);
         return ResponseEntity.ok(nuevoAlquiler);
+    }
+
+    @PutMapping("/{idAlquiler}/finalizar")
+    public ResponseEntity<Alquiler> finalizarAlquiler(@PathVariable String idAlquiler) {
+        Alquiler alquilerFinalizado = alquilerService.finalizarAlquiler(idAlquiler);
+        return ResponseEntity.ok(alquilerFinalizado);
     }
 }

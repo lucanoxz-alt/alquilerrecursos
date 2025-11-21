@@ -16,20 +16,44 @@ import ConfiguracionPage from './pages/admin/Configuracion/ConfiguracionPage';
 // import GestionarTiposRecursosPage from './pages/admin/GestionarTiposRecursosPage';
 import GestionarAlquileresPage from './pages/admin/GestionarAlquileres/GestionarAlquileresPage';
 
+// Nuevas páginas de mantenimiento de datos
+import GestionClientes from './pages/admin/MantenimientoDatos/GestionClientes';
+import GestionRecursos from './pages/admin/MantenimientoDatos/GestionRecursos';
+import GestionTiposRecursos from './pages/admin/MantenimientoDatos/GestionTiposRecursos';
+import GestionUsuarios from './pages/admin/MantenimientoDatos/GestionUsuarios';
+
+// Debug log para verificar importación
+console.log('🔍 GestionarAlquileresPage importado:', GestionarAlquileresPage);
+
 export default function App() {
+  console.log('🔥 APP.JSX CARGADO - ARCHIVO MODIFICADO 🔥');
   const [user, setUser] = useState(null);
 
   useEffect(() => {
+    console.log('🔄 Verificando userData en localStorage...');
     const userData = localStorage.getItem('userData');
-    if (userData) {
-      setUser(JSON.parse(userData));
+    const token = localStorage.getItem('authToken');
+    console.log('🔄 userData encontrado:', userData);
+    console.log('🔄 token encontrado:', token ? 'Sí' : 'No');
+    
+    if (userData && token) {
+      const parsedUserData = JSON.parse(userData);
+      console.log('🔄 Configurando usuario:', parsedUserData);
+      setUser(parsedUserData);
     }
   }, []);
 
   const handleLogin = (userData) => {
+    console.log('🔄 handleLogin llamado con:', userData);
     setUser(userData);
-    localStorage.setItem('authToken', userData.token);
-    localStorage.setItem('userData', JSON.stringify(userData));
+    
+    // Verificar que se guardó correctamente
+    setTimeout(() => {
+      const savedUserData = localStorage.getItem('userData');
+      const savedToken = localStorage.getItem('authToken');
+      console.log('🔄 Verificación post-login - userData:', savedUserData);
+      console.log('🔄 Verificación post-login - token:', savedToken);
+    }, 100);
   };
 
   const handleLogout = () => {
@@ -40,7 +64,16 @@ export default function App() {
 
   // Componente para rutas protegidas
   const PrivateRoute = ({ children }) => {
-    return user ? children : <Navigate to="/login" />;
+    console.log('🔒 PrivateRoute - Usuario actual:', user);
+    const isAuthenticated = !!user;
+    console.log('🔒 PrivateRoute - Está autenticado:', isAuthenticated);
+    
+    if (!isAuthenticated) {
+      console.log('🔒 PrivateRoute - Redirigiendo a login');
+      return <Navigate to="/login" />;
+    }
+    
+    return children;
   };
 
   // Componente para rutas públicas
@@ -76,6 +109,10 @@ export default function App() {
           <Route path="reservas" element={<GestionarReservasPage user={user} />} />
           <Route path="promociones" element={<GestionarPromocionesPage user={user} />} />
           <Route path="mantenimiento" element={<MantenimientoDatosPage user={user} />} />
+          <Route path="mantenimiento/clientes" element={<GestionClientes user={user} />} />
+          <Route path="mantenimiento/recursos" element={<GestionRecursos user={user} />} />
+          <Route path="mantenimiento/tipos-recursos" element={<GestionTiposRecursos user={user} />} />
+          <Route path="mantenimiento/usuarios" element={<GestionUsuarios user={user} />} />
           <Route path="reportes" element={<ReportesPage user={user} />} />
           <Route path="configuracion" element={<ConfiguracionPage user={user} />} />
           {/* Comentamos la ruta temporalmente hasta que implementes la lógica en el backend */}

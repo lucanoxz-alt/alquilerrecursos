@@ -8,6 +8,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/api/reserva")
 public class ReservaController {
@@ -19,6 +21,44 @@ public class ReservaController {
     public ResponseEntity<Reserva> crearReserva(@RequestBody ReservaRequest request) {
         Reserva nueva = reservaService.crearReserva(request); // ← Debe coincidir con el método público
         return ResponseEntity.ok(nueva);
+    }
+
+    @GetMapping
+    public ResponseEntity<List<Reserva>> obtenerTodasLasReservas() {
+        List<Reserva> reservas = reservaService.obtenerTodasLasReservas();
+        return ResponseEntity.ok(reservas);
+    }
+
+    @GetMapping("/{idReserva}")
+    public ResponseEntity<Reserva> obtenerReservaPorId(@PathVariable String idReserva) {
+        Reserva reserva = reservaService.obtenerReservaPorId(idReserva);
+        if (reserva != null) {
+            return ResponseEntity.ok(reserva);
+        } else {
+            return ResponseEntity.notFound().build();
+        }
+    }
+
+    @GetMapping("/estado/{estado}")
+    public ResponseEntity<List<Reserva>> obtenerReservasPorEstado(@PathVariable String estado) {
+        List<Reserva> reservas = reservaService.obtenerReservasPorEstado(estado);
+        return ResponseEntity.ok(reservas);
+    }
+
+    @GetMapping("/turista/{idTurista}")
+    public ResponseEntity<List<Reserva>> obtenerReservasPorTurista(@PathVariable String idTurista) {
+        List<Reserva> reservas = reservaService.obtenerReservasPorTurista(idTurista);
+        return ResponseEntity.ok(reservas);
+    }
+
+    @PutMapping("/{idReserva}/confirmar")
+    public ResponseEntity<Reserva> confirmarReserva(@PathVariable String idReserva) {
+        try {
+            Reserva reserva = reservaService.confirmarReserva(idReserva);
+            return ResponseEntity.ok(reserva);
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().build();
+        }
     }
 
     @PutMapping("/{idReserva}/cancelar")

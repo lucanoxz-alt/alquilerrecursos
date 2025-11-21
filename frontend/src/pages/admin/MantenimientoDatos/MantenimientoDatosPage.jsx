@@ -44,7 +44,7 @@ const MantenimientoDatosPage = ({ user }) => {
     return (
       <Link to={module.path} className="block">
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition-shadow h-full">
-          <div className={`w-12 h-12 rounded-lg bg-${module.color}-100 flex items-center justify-center mb-4`}>
+          <div className={`w-12 h-12 rounded-lg bg-${module.color}-100 border border-${module.color}-200 shadow-sm flex items-center justify-center mb-4`}>
             <Icon className={`w-6 h-6 text-${module.color}-600`} />
           </div>
           <h3 className="text-lg font-semibold text-gray-900 mb-2">{module.title}</h3>

@@ -11,6 +11,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
+import java.util.List;
+import java.util.ArrayList;
 import java.util.UUID;
 
 @Service
@@ -29,11 +31,31 @@ public class ReservaService {
 
     @Transactional
     public Reserva crearReserva(ReservaRequest request) { // ← Debe ser public
-        // 1. Calcular costo total
+        // 1. Validar que los recursos existen y están disponibles
+        for (ReservaRequest.RecursoSolicitado recursoReq : request.getRecursos()) {
+            String idRecurso = recursoReq.getIdRecurso();
+            if (idRecurso == null) {
+                throw new RuntimeException("ID de recurso no puede ser null");
+            }
+            
+            // Verificación básica de disponibilidad
+            Recurso recurso = recursoRepository.findById(idRecurso)
+                .orElseThrow(() -> new RuntimeException("Recurso no encontrado: " + idRecurso));
+            
+            if (!"Disponible".equals(recurso.getEstado())) {
+                throw new RuntimeException("Recurso " + idRecurso + " no está disponible (Estado: " + recurso.getEstado() + ")");
+            }
+        }
+        
+        // 2. Calcular costo total
         BigDecimal costoTotal = BigDecimal.ZERO;
         for (ReservaRequest.RecursoSolicitado recursoReq : request.getRecursos()) {
-            Recurso recurso = recursoRepository.findById(recursoReq.getIdRecurso())
-                .orElseThrow(() -> new RuntimeException("Recurso no encontrado: " + recursoReq.getIdRecurso()));
+            String idRecurso = recursoReq.getIdRecurso();
+            if (idRecurso == null) {
+                throw new RuntimeException("ID de recurso no puede ser null");
+            }
+            Recurso recurso = recursoRepository.findById(idRecurso)
+                .orElseThrow(() -> new RuntimeException("Recurso no encontrado: " + idRecurso));
             BigDecimal subtotal = recurso.getTarifaHora()
                 .multiply(BigDecimal.valueOf(recursoReq.getHorasSolicitadas()));
             costoTotal = costoTotal.add(subtotal);
@@ -41,8 +63,9 @@ public class ReservaService {
 
         // 2. Aplicar promoción si existe y cumple condición
         Promocion promocion = null;
-        if (request.getIdPromocion() != null && !request.getIdPromocion().isEmpty()) {
-            promocion = promocionRepository.findById(request.getIdPromocion())
+        String idPromocion = request.getIdPromocion();
+        if (idPromocion != null && !idPromocion.isEmpty()) {
+            promocion = promocionRepository.findById(idPromocion)
                 .orElse(null);
             if (promocion != null && promocion.getActiva()) {
                 int totalHoras = request.getRecursos().stream()
@@ -70,18 +93,32 @@ public class ReservaService {
 
         reserva = reservaRepository.save(reserva);
 
-        // 5. Guardar detalles de reserva
-        for (int i = 0; i < request.getRecursos().size(); i++) {
-            ReservaRequest.RecursoSolicitado r = request.getRecursos().get(i);
+        // 5. Cambiar estado de recursos a "Reservado"
+        for (ReservaRequest.RecursoSolicitado r : request.getRecursos()) {
+            String idRecurso = r.getIdRecurso();
+            if (idRecurso != null) {
+                Recurso recurso = recursoRepository.findById(idRecurso)
+                    .orElseThrow(() -> new RuntimeException("Recurso no encontrado: " + idRecurso));
+                recurso.setEstado("Reservado");
+                recursoRepository.save(recurso);
+            }
+        }
+        
+        // 6. Guardar detalles de reserva
+        List<ReservaRequest.RecursoSolicitado> recursos = request.getRecursos();
+        for (int i = 0; i < recursos.size(); i++) {
+            ReservaRequest.RecursoSolicitado r = recursos.get(i);
             DetalleReserva detalle = new DetalleReserva();
             detalle.setIdDetalleReserva("DR" + String.format("%03d", i + 1 + detalleReservaRepository.findAll().size()));
-            detalle.setIdReserva(idReserva);
+            if (idReserva != null) {
+                detalle.setIdReserva(idReserva);
+            }
             detalle.setIdRecurso(r.getIdRecurso());
             detalle.setHorasSolicitadas(r.getHorasSolicitadas());
             detalleReservaRepository.save(detalle);
         }
 
-        // 6. Registrar pago del 50%
+        // 7. Registrar pago del 50%
         BigDecimal montoPago = costoTotal.multiply(BigDecimal.valueOf(0.5))
                 .setScale(2, RoundingMode.HALF_UP); // ✅ Forma moderna (Java 9+)
         PagoReserva pago = new PagoReserva();
@@ -115,10 +152,24 @@ public class ReservaService {
         reserva.setIdUsuarioCancelacion(request.getIdUsuarioCancelacion());
         reserva.setMotivoCancelacion(request.getMotivoCancelacion());
 
-        // 4. Guardar la reserva actualizada
+        // 4. Liberar recursos (cambiar estado a "Disponible")
+        if (idReserva != null) {
+            List<DetalleReserva> detallesReserva = detalleReservaRepository.findByIdReserva(idReserva);
+            for (DetalleReserva detalle : detallesReserva) {
+                String idRecurso = detalle.getIdRecurso();
+                if (idRecurso != null && !idRecurso.isEmpty()) {
+                    Recurso recurso = recursoRepository.findById(idRecurso)
+                        .orElseThrow(() -> new RuntimeException("Recurso no encontrado: " + idRecurso));
+                    recurso.setEstado("Disponible");
+                    recursoRepository.save(recurso);
+                }
+            }
+        }
+
+        // 5. Guardar la reserva actualizada
         reserva = reservaRepository.save(reserva);
 
-        // 5. Llamar a la lógica de devolución (puedes implementarla más adelante)
+        // 6. Llamar a la lógica de devolución
         devolverPagoReserva(idReserva);
 
         return reserva;
@@ -131,6 +182,50 @@ public class ReservaService {
         // - Llamar a una pasarela de pago (en producción).
         // Por ahora, dejamos un placeholder.
         System.out.println("Devolución procesada para la reserva: " + idReserva);
+    }
+
+    /**
+     * Obtener todas las reservas
+     */
+    public List<Reserva> obtenerTodasLasReservas() {
+        return reservaRepository.findAll();
+    }
+
+    /**
+     * Obtener una reserva por ID
+     */
+    public Reserva obtenerReservaPorId(String idReserva) {
+        return reservaRepository.findById(idReserva).orElse(null);
+    }
+
+    /**
+     * Obtener reservas por estado
+     */
+    public List<Reserva> obtenerReservasPorEstado(String estado) {
+        return reservaRepository.findByEstadoreserva(estado);
+    }
+
+    /**
+     * Obtener reservas por turista
+     */
+    public List<Reserva> obtenerReservasPorTurista(String idTurista) {
+        return reservaRepository.findByIdTurista(idTurista);
+    }
+
+    /**
+     * Confirmar una reserva (cambiar estado de Pendiente a Confirmada)
+     */
+    @Transactional
+    public Reserva confirmarReserva(String idReserva) {
+        Reserva reserva = reservaRepository.findById(idReserva)
+            .orElseThrow(() -> new RuntimeException("Reserva no encontrada: " + idReserva));
+
+        if (!"Pendiente".equals(reserva.getEstadoreserva())) {
+            throw new RuntimeException("Solo se pueden confirmar reservas en estado Pendiente");
+        }
+
+        reserva.setEstadoreserva("Confirmada");
+        return reservaRepository.save(reserva);
     }
 
 }
