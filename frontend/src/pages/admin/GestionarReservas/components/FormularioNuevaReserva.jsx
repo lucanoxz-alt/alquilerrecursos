@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Card } from '../../../components/ui/Card';
-import { Button } from '../../../components/ui/Button';
-import SeleccionRecursosConValidacion from '../../../components/SeleccionRecursosConValidacion';
-import { reservaService } from '../../../services/api';
+import { Card, Button } from '@/components/ui';
+import SeleccionRecursosConValidacion from '@/components/SeleccionRecursosConValidacion';
+import { reservaService, turistaService, promocionService } from '@/services/api';
 import { Calendar, User, Clock, Tag, DollarSign } from 'lucide-react';
 
 const FormularioNuevaReserva = ({ onReservaCreada, onCerrar }) => {
@@ -28,15 +27,13 @@ const FormularioNuevaReserva = ({ onReservaCreada, onCerrar }) => {
 
   const cargarDatosIniciales = async () => {
     try {
-      // Cargar turistas
-      const responseTuristas = await fetch('/api/turistas');
-      const turistasData = await responseTuristas.json();
+      // Cargar turistas usando el servicio
+      const turistasData = await turistaService.obtenerTodos();
       setTuristas(turistasData || []);
 
-      // Cargar promociones activas
-      const responsePromociones = await fetch('/api/promociones');
-      const promocionesData = await responsePromociones.json();
-      setPromociones(promocionesData.filter(p => p.activa) || []);
+      // Cargar promociones activas usando el servicio
+      const promocionesData = await promocionService.obtenerActivas();
+      setPromociones(promocionesData || []);
     } catch (error) {
       console.error('Error cargando datos:', error);
       setError('Error cargando datos iniciales');

@@ -1,0 +1,66 @@
+USE AlquilerDeVehiculosParaPlaya;
+GO
+
+-- Insertar Tipos de Recurso
+EXEC REGISTRARTIPORECURSO 'TR001', 'Cuatrimoto', 'Vehículos todo terreno sobre 4 ruedas';
+EXEC REGISTRARTIPORECURSO 'TR002', 'Moto Acuática', 'Embarcaciones personales propulsadas por jet';
+EXEC REGISTRARTIPORECURSO 'TR003', 'Bicicleta', 'Vehículos de pedales';
+EXEC REGISTRARTIPORECURSO 'TR004', 'Kitesurf', 'Equipo para navegación con cometa';
+
+-- Insertar Promociones
+EXEC REGISTRARPROMOCION 'PROM001', 'Descuento 3h+', '10% de descuento por más de 3h de alquiler total', 3, 10.00, 1;
+EXEC REGISTRARPROMOCION 'PROM002', 'Paquete Familiar', '15% de descuento en 4 o más recursos', 4, 15.00, 0;
+
+-- Insertar Recursos
+EXEC REGISTRARRECURSO 'REC001', 'Cuatrimoto Estándar (150cc)', 'Recorridos suaves en tierra', 40.00, 'Disponible', 'Zona A', 'TR001';
+EXEC REGISTRARRECURSO 'REC002', 'Cuatrimoto Todo Terreno (250cc)', 'Caminos irregulares y arena', 60.00, 'Disponible', 'Zona A', 'TR001';
+EXEC REGISTRARRECURSO 'REC003', 'Cuatrimoto Deportiva (350cc)', 'Aventuras extremas', 80.00, 'Disponible', 'Zona B', 'TR001';
+EXEC REGISTRARRECURSO 'REC004', 'Moto Acuática', 'Navegación supervisada en lagunas o mar', 100.00, 'Disponible', 'Zona C', 'TR002';
+EXEC REGISTRARRECURSO 'REC005', 'Bicicleta MTB', 'Paseos urbanos o senderos turísticos', 25.00, 'Disponible', 'Zona D', 'TR003';
+EXEC REGISTRARRECURSO 'REC006', 'Bicicleta Eléctrica', 'Recorrido asistido para adultos', 35.00, 'Disponible', 'Zona D', 'TR003';
+EXEC REGISTRARRECURSO 'REC007', 'Kitesurf (equipo completo)', 'Tabla, cometa y arnés incluidos', 120.00, 'Disponible', 'Zona E', 'TR004';
+
+-- Insertar Usuarios
+EXEC REGISTRARUSUARIO 'USR001', 'Admin', 'System', 'admin_user', 'HASH_EJEMPLO_ADMIN', 'Administrador', 'admin@empresa.com', '999000000';
+EXEC REGISTRARUSUARIO 'USR002', 'Empleado', 'Local', 'emp_local', 'HASH_EJEMPLO_EMPLEADO', 'Empleado', 'empleado@empresa.com', '999000001';
+EXEC REGISTRARUSUARIO 'USR003', 'Jefe', 'Zonal', 'jefe_zonal', 'HASH_EJEMPLO_JEFE', 'Jefe', 'jefe@empresa.com', '999000002';
+EXEC REGISTRARUSUARIO 'USR004', 'Empleado2', 'Local2', 'emp_local2', 'HASH_EJEMPLO_EMPLEADO2', 'Empleado', 'empleado2@empresa.com', '999000003';
+
+-- Insertar Turistas
+EXEC REGISTRARTURISTA 'TUR001', 'Carlos', 'ApellidoCarlos', '12345678', 'Peruana', '999888777', 'carlos@email.com';
+EXEC REGISTRARTURISTA 'TUR002', 'Ana', 'ApellidoAna', 'P87654321', 'Argentina', '888777666', 'ana@email.com';
+EXEC REGISTRARTURISTA 'TUR003', 'Roberto', 'ApellidoRoberto', '98765432', 'Colombiana', '777666555', 'roberto@email.com';
+EXEC REGISTRARTURISTA 'TUR004', 'María', 'ApellidoMaria', 'M12345678', 'Española', '666555444', 'maria@email.com';
+
+-- ========================================================================
+-- ESCENARIO 1: Reserva con promoción (nuevo)
+-- ========================================================================
+-- María reserva 4 horas de Kitesurf → aplica PROM001
+-- Costo sin descuento: 120 * 4 = 480
+-- Descuento: 48 → Total estimado: 432 → Pago inicial: 216
+EXEC REGISTRARRESERVA 
+    'RES003', 'TUR004', '2025-11-10 10:00:00', 'Pendiente', 432.00,
+    NULL, NULL, NULL, 'PROM001';
+
+EXEC REGISTRARDETALLERESERVA 'DR006', 'RES003', 'REC007', 4;
+EXEC REGISTRARPAGORESERVA 'PR003', 'RES003', 216.00, 'Tarjeta', 'COMP-003';
+
+-- ========================================================================
+-- ESCENARIO 2: Reserva cancelada con motivo y usuario
+-- ========================================================================
+-- Roberto cancela su reserva por "Problemas de salud"
+EXEC REGISTRARRESERVA 
+    'RES004', 'TUR003', '2025-11-15 09:00:00', 'Cancelada', 150.00,
+    '2025-11-02 14:30:00', 'USR003', 'Problemas de salud', NULL;
+
+EXEC REGISTRARDETALLERESERVA 'DR007', 'RES004', 'REC005', 2;
+EXEC REGISTRARDETALLERESERVA 'DR008', 'RES004', 'REC005', 2;
+EXEC REGISTRARDETALLERESERVA 'DR009', 'RES004', 'REC005', 2;
+EXEC REGISTRARPAGORESERVA 'PR004', 'RES004', 75.00, 'Efectivo', 'COMP-004';
+
+-- ========================================================================
+-- ESCENARIO 3: Alquiler directo con promoción (sin reserva)
+-- ========================================================================
+EXEC REGISTRARALQUILER 'ALQ005', 'TUR001', 'USR002', '2025-11-05 15:00:00', 3, 324.00, 'Finalizado', NULL, 'PROM001';
+EXEC REGISTRARDETALLEALQUILER 'DA007', 'ALQ005', 'REC007', 3, 360.00;
+EXEC REGISTRARPAGO 'PAG005', 'ALQ005', 360.00, 36.00, 324.00, 324.00, 'BOLETA-005', 'Tarjeta';

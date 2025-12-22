@@ -58,10 +58,17 @@ const GestionTiposRecursos = () => {
   const handleDelete = async (id) => {
     if (window.confirm('¿Estás seguro de eliminar este tipo de recurso?')) {
       try {
+        // Verificar que no haya recursos usando este tipo
+        const recursosDeEsteTipo = await api.get(`/recursos/tipo/${id}`).then(r => r.data);
+        if (Array.isArray(recursosDeEsteTipo) && recursosDeEsteTipo.length > 0) {
+          alert('No se puede eliminar: existen recursos asociados a este tipo.');
+          return;
+        }
         await api.delete(`/tipos-recursos/${id}`);
         cargarTiposRecursos();
       } catch (error) {
         console.error('Error al eliminar tipo de recurso:', error);
+        alert(error?.response?.data || 'No se pudo eliminar el tipo de recurso');
       }
     }
   };

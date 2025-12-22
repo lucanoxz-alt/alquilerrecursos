@@ -23,37 +23,22 @@ import GestionTiposRecursos from './pages/admin/MantenimientoDatos/GestionTiposR
 import GestionUsuarios from './pages/admin/MantenimientoDatos/GestionUsuarios';
 
 // Debug log para verificar importación
-console.log('🔍 GestionarAlquileresPage importado:', GestionarAlquileresPage);
 
 export default function App() {
-  console.log('🔥 APP.JSX CARGADO - ARCHIVO MODIFICADO 🔥');
   const [user, setUser] = useState(null);
 
   useEffect(() => {
-    console.log('🔄 Verificando userData en localStorage...');
     const userData = localStorage.getItem('userData');
     const token = localStorage.getItem('authToken');
-    console.log('🔄 userData encontrado:', userData);
-    console.log('🔄 token encontrado:', token ? 'Sí' : 'No');
     
     if (userData && token) {
       const parsedUserData = JSON.parse(userData);
-      console.log('🔄 Configurando usuario:', parsedUserData);
       setUser(parsedUserData);
     }
   }, []);
 
   const handleLogin = (userData) => {
-    console.log('🔄 handleLogin llamado con:', userData);
     setUser(userData);
-    
-    // Verificar que se guardó correctamente
-    setTimeout(() => {
-      const savedUserData = localStorage.getItem('userData');
-      const savedToken = localStorage.getItem('authToken');
-      console.log('🔄 Verificación post-login - userData:', savedUserData);
-      console.log('🔄 Verificación post-login - token:', savedToken);
-    }, 100);
   };
 
   const handleLogout = () => {
@@ -64,12 +49,9 @@ export default function App() {
 
   // Componente para rutas protegidas
   const PrivateRoute = ({ children }) => {
-    console.log('🔒 PrivateRoute - Usuario actual:', user);
     const isAuthenticated = !!user;
-    console.log('🔒 PrivateRoute - Está autenticado:', isAuthenticated);
     
     if (!isAuthenticated) {
-      console.log('🔒 PrivateRoute - Redirigiendo a login');
       return <Navigate to="/login" />;
     }
     

@@ -4,13 +4,11 @@ import { Plus, User, CreditCard, Search } from 'lucide-react';
 import api from '../../../../services/api';
 
 const BusquedaCliente = ({ query, onQueryChange, onClientSelected, onShowNewClientForm, selectedClient }) => {
-  console.log('🔍 BusquedaCliente cargado con props:', { query, selectedClient });
   const [resultadosBusqueda, setResultadosBusqueda] = useState([]);
   const [mostrarResultados, setMostrarResultados] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
   const buscarClientes = async (searchQuery) => {
-    console.log('🔍 buscarClientes llamado con:', searchQuery);
     if (!searchQuery.trim()) {
       setResultadosBusqueda([]);
       setMostrarResultados(false);
@@ -19,14 +17,14 @@ const BusquedaCliente = ({ query, onQueryChange, onClientSelected, onShowNewClie
 
     setIsLoading(true);
     try {
-      console.log('🔍 Haciendo petición API:', `/turistas/buscar?query=${encodeURIComponent(searchQuery)}`);
+      // Intentar API real primero
       const response = await api.get(`/turistas/buscar?query=${encodeURIComponent(searchQuery)}`);
-      console.log('🔍 Respuesta API:', response.data);
       setResultadosBusqueda(response.data);
       setMostrarResultados(true);
     } catch (error) {
-      console.error('❌ Error al buscar clientes:', error);
+      console.error('Error buscando clientes:', error);
       setResultadosBusqueda([]);
+      setMostrarResultados(true);
     } finally {
       setIsLoading(false);
     }

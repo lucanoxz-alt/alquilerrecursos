@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Shield, Plus, Edit, Trash2, Search, User, Mail, Key, AlertTriangle } from 'lucide-react';
+import { Shield, Plus, Edit, Trash2, Search, User, Mail, Key, AlertTriangle, Phone } from 'lucide-react';
 import api from '../../../services/api';
 
 const GestionUsuarios = () => {
@@ -12,9 +12,10 @@ const GestionUsuarios = () => {
     nombre: '',
     apellidos: '',
     email: '',
+    telefono: '',
     password: '',
     rol: 'empleado',
-    activo: true
+    estadoUsuario: 'Activo'
   });
 
   useEffect(() => {
@@ -35,8 +36,9 @@ const GestionUsuarios = () => {
           nombre: 'Admin',
           apellidos: 'Sistema',
           email: 'admin@turismo.com',
+          telefono: '+51 999 000 001',
           rol: 'administrador',
-          activo: true,
+          estadoUsuario: 'Activo',
           fechaCreacion: '2024-01-01'
         },
         {
@@ -44,8 +46,9 @@ const GestionUsuarios = () => {
           nombre: 'Empleado',
           apellidos: 'Demo',
           email: 'empleado@turismo.com',
+          telefono: '+51 999 000 002',
           rol: 'empleado',
-          activo: true,
+          estadoUsuario: 'Activo',
           fechaCreacion: '2024-01-15'
         }
       ]);
@@ -78,12 +81,13 @@ const GestionUsuarios = () => {
       nombre: usuario.nombre || '',
       apellidos: usuario.apellidos || '',
       email: usuario.email || '',
+      telefono: usuario.telefono || '',
       password: '', // No mostrar password actual por seguridad
       rol: usuario.rol || 'empleado',
-      activo: usuario.activo !== false
+      estadoUsuario: usuario.estadoUsuario || 'Activo'
     });
     setShowModal(true);
-  };
+  }; 
 
   const handleDelete = async (id) => {
     if (window.confirm('¿Estás seguro de eliminar este usuario?')) {
@@ -112,11 +116,12 @@ const GestionUsuarios = () => {
       nombre: '',
       apellidos: '',
       email: '',
+      telefono: '',
       password: '',
       rol: 'empleado',
-      activo: true
+      estadoUsuario: 'Activo'
     });
-  };
+  }; 
 
   const getRolBadge = (rol) => {
     const roles = {
@@ -195,7 +200,7 @@ const GestionUsuarios = () => {
               <thead className="bg-gray-50">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Usuario</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Contacto</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Rol</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
@@ -218,9 +223,17 @@ const GestionUsuarios = () => {
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center text-sm text-gray-900">
-                        <Mail className="h-4 w-4 mr-2 text-gray-400" />
-                        {usuario.email}
+                      <div className="flex flex-col text-sm text-gray-900">
+                        <div className="flex items-center">
+                          <Mail className="h-4 w-4 mr-2 text-gray-400" />
+                          {usuario.email || '-'}
+                        </div>
+                        {usuario.telefono && (
+                          <div className="flex items-center text-sm text-gray-500 mt-1">
+                            <Phone className="h-4 w-4 mr-2 text-gray-400" />
+                            {usuario.telefono}
+                          </div>
+                        )}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
@@ -228,11 +241,11 @@ const GestionUsuarios = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        usuario.activo !== false 
+                        (usuario.estadoUsuario || 'Activo') === 'Activo' 
                           ? 'bg-green-100 text-green-800' 
-                          : 'bg-red-100 text-red-800'
+                          : (usuario.estadoUsuario === 'Desactivado' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800')
                       }`}>
-                        {usuario.activo !== false ? 'Activo' : 'Inactivo'}
+                        {usuario.estadoUsuario || 'Activo'}
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
@@ -249,8 +262,8 @@ const GestionUsuarios = () => {
                           className="text-yellow-600 hover:text-yellow-900 flex items-center"
                         >
                           <Key className="h-4 w-4 mr-1" />
-                          {usuario.activo !== false ? 'Desactivar' : 'Activar'}
-                        </button>
+                          {(usuario.estadoUsuario || 'Activo') === 'Activo' ? 'Desactivar' : 'Activar'}
+                        </button> 
                         <button
                           onClick={() => handleDelete(usuario.idUsuario)}
                           className="text-red-600 hover:text-red-900 flex items-center"
@@ -326,6 +339,20 @@ const GestionUsuarios = () => {
                     required
                     value={formData.email}
                     onChange={(e) => setFormData({...formData, email: e.target.value})}
+                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Teléfono</label>
+                <div className="relative">
+                  <Phone className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" />
+                  <input
+                    type="text"
+                    value={formData.telefono}
+                    onChange={(e) => setFormData({...formData, telefono: e.target.value})}
+                    placeholder="Ej: +51 999 999 999"
                     className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
                   />
                 </div>

@@ -95,6 +95,7 @@ public class AlquilerService {
                 .sum());
             alquiler.setCostoTotal(costoTotal);
             alquiler.setEstadoalquiler("Activo");
+            alquiler.setFechaHoraFin(request.getFechaHoraInicio().plusHours(alquiler.getDuracionHoras()));
             alquiler.setIdReserva(idReserva);
             alquiler.setIdPromocion(promocion != null ? promocion.getIdPromocion() : null);
             alquilerRepository.save(alquiler);
@@ -215,6 +216,7 @@ public class AlquilerService {
             alquiler.setEstadoalquiler("Activo");
             alquiler.setIdReserva(null);
             alquiler.setIdPromocion(promocion != null ? promocion.getIdPromocion() : null);
+            alquiler.setFechaHoraFin(request.getFechaHoraInicio().plusHours(alquiler.getDuracionHoras()));
             alquilerRepository.save(alquiler);
 
             // Cambiar estado de recursos a "Alquilado"

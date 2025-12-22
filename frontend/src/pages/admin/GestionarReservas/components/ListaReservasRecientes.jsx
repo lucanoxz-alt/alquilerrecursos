@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Card } from '../../../components/ui/Card';
-import { Button } from '../../../components/ui/Button';
-import { reservaService } from '../../../services/api';
+import { Card, Button } from '@/components/ui';
+import { reservaService } from '@/services/api';
 import { 
   Calendar, 
   User, 
@@ -29,8 +28,7 @@ const ListaReservasRecientes = ({ actualizarLista, onEditarReserva, onVerDetalle
     setLoading(true);
     setError('');
     try {
-      const response = await fetch('/api/reserva');
-      const data = await response.json();
+      const data = await reservaService.obtenerTodas();
       setReservas(data || []);
     } catch (error) {
       console.error('Error cargando reservas:', error);
@@ -42,7 +40,7 @@ const ListaReservasRecientes = ({ actualizarLista, onEditarReserva, onVerDetalle
 
   const confirmarReserva = async (idReserva) => {
     try {
-      await fetch(`/api/reserva/${idReserva}/confirmar`, { method: 'PUT' });
+      await reservaService.confirmar(idReserva);
       await cargarReservas(); // Recargar lista
     } catch (error) {
       console.error('Error confirmando reserva:', error);

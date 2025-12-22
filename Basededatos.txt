@@ -1,0 +1,263 @@
+USE AlquilerDeVehiculosParaPlaya;
+GO
+
+
+-- ========================================================================
+-- CREAR TABLAS
+-- ========================================================================
+
+CREATE TABLE TIPO_RECURSO (
+    id_tipo CHAR(5) PRIMARY KEY,
+    nombre NVARCHAR(100) NOT NULL UNIQUE,
+    descripcion NVARCHAR(255)
+);
+
+CREATE TABLE PROMOCION (
+    id_promocion CHAR(7) PRIMARY KEY,
+    nombre NVARCHAR(100) NOT NULL,
+    descripcion NVARCHAR(255),
+    condicion_minima INT NOT NULL CHECK (condicion_minima > 0),
+    porcentaje_desc DECIMAL(5, 2) NOT NULL CHECK (porcentaje_desc BETWEEN 0 AND 100),
+    activa BIT NOT NULL DEFAULT 1
+);
+
+CREATE TABLE TURISTA (
+    id_turista CHAR(6) PRIMARY KEY,
+    nombres NVARCHAR(100) NOT NULL,
+    apellidos NVARCHAR(100) NOT NULL,
+    dni_pasaporte NVARCHAR(20) UNIQUE NOT NULL,
+    nacionalidad NVARCHAR(50),
+    telefono NVARCHAR(20),
+    email NVARCHAR(255)
+);
+
+CREATE TABLE USUARIO (
+    id_usuario CHAR(6) PRIMARY KEY,
+    nombre NVARCHAR(100) NOT NULL,
+    apellidos NVARCHAR(100) NOT NULL,
+    username NVARCHAR(50) UNIQUE NOT NULL,
+    password NVARCHAR(255) NOT NULL,
+    rol NVARCHAR(50) NOT NULL CHECK (rol IN ('Administrador', 'Jefe', 'Empleado')),
+    email NVARCHAR(255) UNIQUE,
+    telefono NVARCHAR(20)
+);
+
+CREATE TABLE RECURSO (
+    id_recurso CHAR(6) PRIMARY KEY,
+    nombre NVARCHAR(100) NOT NULL,
+    descripcion NVARCHAR(255),
+    tarifa_hora DECIMAL(10, 2) NOT NULL CHECK (tarifa_hora >= 0),
+    estado NVARCHAR(20) NOT NULL DEFAULT 'Disponible' 
+        CHECK (estado IN ('Disponible', 'Alquilado', 'Mantenimiento', 'Reservado', 'Fuera de Servicio')),
+    ubicacion NVARCHAR(255),
+    id_tipo CHAR(5) NOT NULL,
+    FOREIGN KEY (id_tipo) REFERENCES TIPO_RECURSO(id_tipo)
+);
+
+CREATE TABLE RESERVA (
+    id_reserva CHAR(6) PRIMARY KEY,
+    id_turista CHAR(6) NOT NULL,
+    fecha_hora_inicio_prevista DATETIME NOT NULL,
+    estadoreserva NVARCHAR(20) NOT NULL DEFAULT 'Pendiente' 
+        CHECK (estadoreserva IN ('Pendiente', 'Confirmada', 'Cancelada')),
+    costo_total_estimado DECIMAL(10, 2) NOT NULL CHECK (costo_total_estimado >= 0),
+    fecha_cancelacion DATETIME NULL,
+    id_usuario_cancelacion CHAR(6) NULL,
+    motivo_cancelacion NVARCHAR(255) NULL,
+    id_promocion CHAR(7) NULL,
+    FOREIGN KEY (id_turista) REFERENCES TURISTA(id_turista),
+    FOREIGN KEY (id_usuario_cancelacion) REFERENCES USUARIO(id_usuario),
+    FOREIGN KEY (id_promocion) REFERENCES PROMOCION(id_promocion)
+);
+
+CREATE TABLE DETALLE_RESERVA (
+    id_detalle_reserva CHAR(6) PRIMARY KEY,
+    id_reserva CHAR(6) NOT NULL,
+    id_recurso CHAR(6) NOT NULL,
+    horas_solicitadas INT NOT NULL CHECK (horas_solicitadas > 0),
+    FOREIGN KEY (id_reserva) REFERENCES RESERVA(id_reserva),
+    FOREIGN KEY (id_recurso) REFERENCES RECURSO(id_recurso)
+);
+
+CREATE TABLE PAGO_RESERVA (
+    id_pago_reserva CHAR(6) PRIMARY KEY,
+    id_reserva CHAR(6) NOT NULL,
+    monto_pago DECIMAL(10,2) NOT NULL CHECK (monto_pago > 0),
+    fecha_pago DATETIME NOT NULL DEFAULT GETDATE(),
+    metodo_pago NVARCHAR(50),
+    num_comprobante NVARCHAR(100),
+    FOREIGN KEY (id_reserva) REFERENCES RESERVA(id_reserva)
+);
+
+CREATE TABLE ALQUILER (
+    id_alquiler CHAR(6) PRIMARY KEY,
+    id_turista CHAR(6) NOT NULL,
+    id_usuario_gestor CHAR(6) NOT NULL,
+    fecha_hora_inicio DATETIME NOT NULL,
+    duracion_horas INT NOT NULL CHECK (duracion_horas > 0),
+    fecha_hora_fin AS DATEADD(HOUR, duracion_horas, fecha_hora_inicio) PERSISTED,
+    costo_total DECIMAL(10, 2) NOT NULL CHECK (costo_total >= 0),
+    estadoalquiler NVARCHAR(20) NOT NULL DEFAULT 'Activo' 
+        CHECK (estadoalquiler IN ('Activo', 'Finalizado')),
+    id_reserva CHAR(6) NULL,
+    id_promocion CHAR(7) NULL,
+    FOREIGN KEY (id_turista) REFERENCES TURISTA(id_turista),
+    FOREIGN KEY (id_usuario_gestor) REFERENCES USUARIO(id_usuario),
+    FOREIGN KEY (id_reserva) REFERENCES RESERVA(id_reserva),
+    FOREIGN KEY (id_promocion) REFERENCES PROMOCION(id_promocion)
+);
+
+CREATE TABLE DETALLE_ALQUILER (
+    id_detalle CHAR(6) PRIMARY KEY,
+    id_alquiler CHAR(6) NOT NULL,
+    id_recurso CHAR(6) NOT NULL,
+    horas_realizadas INT NOT NULL CHECK (horas_realizadas > 0),
+    costo_parcial DECIMAL(10, 2) NOT NULL CHECK (costo_parcial >= 0),
+    FOREIGN KEY (id_alquiler) REFERENCES ALQUILER(id_alquiler),
+    FOREIGN KEY (id_recurso) REFERENCES RECURSO(id_recurso)
+);
+
+CREATE TABLE PAGO (
+    id_pago CHAR(6) PRIMARY KEY,
+    id_alquiler CHAR(6) NOT NULL,
+    subtotal DECIMAL(10,2) NOT NULL,
+    descuento_aplicado DECIMAL(10,2) NOT NULL DEFAULT 0,
+    total_final DECIMAL(10,2) NOT NULL,
+    monto_pagado DECIMAL(10,2) NOT NULL,
+    fecha_emision DATETIME NOT NULL DEFAULT GETDATE(),
+    num_boleta NVARCHAR(50) UNIQUE,
+    metodo_pago NVARCHAR(50),
+    FOREIGN KEY (id_alquiler) REFERENCES ALQUILER(id_alquiler)
+);
+GO
+
+-- ========================================================================
+-- PROCEDIMIENTOS ALMACENADOS ACTUALIZADOS
+-- ========================================================================
+
+CREATE PROCEDURE REGISTRARTIPORECURSO
+    @ID CHAR(5), @NOM NVARCHAR(100), @DESC NVARCHAR(255)
+AS BEGIN
+    INSERT INTO TIPO_RECURSO VALUES (@ID, @NOM, @DESC);
+END;
+GO
+
+CREATE PROCEDURE REGISTRARPROMOCION
+    @ID CHAR(7), @NOM NVARCHAR(100), @DESC NVARCHAR(255),
+    @COND_MIN INT, @PORC_DESC DECIMAL(5,2), @ACTIVA BIT
+AS BEGIN
+    INSERT INTO PROMOCION VALUES (@ID, @NOM, @DESC, @COND_MIN, @PORC_DESC, @ACTIVA);
+END;
+GO
+
+CREATE PROCEDURE REGISTRARRECURSO
+    @ID CHAR(6), @NOM NVARCHAR(100), @DESC NVARCHAR(255),
+    @TARIFA DECIMAL(10,2), @ESTADO NVARCHAR(20), @UBIC NVARCHAR(255), @ID_TIPO CHAR(5)
+AS BEGIN
+    INSERT INTO RECURSO VALUES (@ID, @NOM, @DESC, @TARIFA, @ESTADO, @UBIC, @ID_TIPO);
+END;
+GO
+
+CREATE PROCEDURE REGISTRARTURISTA
+    @ID CHAR(6), @NOM NVARCHAR(100), @APE NVARCHAR(100),
+    @DOCNUM NVARCHAR(20), @NAC NVARCHAR(50), @TEL NVARCHAR(20), @MAIL NVARCHAR(255)
+AS BEGIN
+    INSERT INTO TURISTA VALUES (@ID, @NOM, @APE, @DOCNUM, @NAC, @TEL, @MAIL);
+END;
+GO
+
+CREATE PROCEDURE REGISTRARUSUARIO
+    @ID CHAR(6), @NOM NVARCHAR(100), @APE NVARCHAR(100),
+    @USER NVARCHAR(50), @PASS NVARCHAR(255), @ROL NVARCHAR(50),
+    @EMAIL NVARCHAR(255), @TEL NVARCHAR(20)
+AS BEGIN
+    INSERT INTO USUARIO VALUES (@ID, @NOM, @APE, @USER, @PASS, @ROL, @EMAIL, @TEL);
+END;
+GO
+
+CREATE PROCEDURE REGISTRARRESERVA
+    @ID CHAR(6),
+    @ID_TURISTA CHAR(6),
+    @FECHA_INICIO DATETIME,
+    @ESTADORESERVA NVARCHAR(20),
+    @COSTO_EST DECIMAL(10,2),
+    @FECHA_CANCELACION DATETIME = NULL,
+    @ID_USR_CANCELACION CHAR(6) = NULL,
+    @MOTIVO_CANCELACION NVARCHAR(255) = NULL,
+    @ID_PROMOCION CHAR(7) = NULL
+AS BEGIN
+    INSERT INTO RESERVA (
+        id_reserva, id_turista, fecha_hora_inicio_prevista, estadoreserva,
+        costo_total_estimado, fecha_cancelacion, id_usuario_cancelacion,
+        motivo_cancelacion, id_promocion
+    ) VALUES (
+        @ID, @ID_TURISTA, @FECHA_INICIO, @ESTADORESERVA, @COSTO_EST,
+        @FECHA_CANCELACION, @ID_USR_CANCELACION, @MOTIVO_CANCELACION, @ID_PROMOCION
+    );
+END;
+GO
+
+CREATE PROCEDURE REGISTRARDETALLERESERVA
+    @ID CHAR(6), @ID_RESERVA CHAR(6), @ID_RECURSO CHAR(6), @HORAS_SOLICITADAS INT
+AS BEGIN
+    INSERT INTO DETALLE_RESERVA VALUES (@ID, @ID_RESERVA, @ID_RECURSO, @HORAS_SOLICITADAS);
+END;
+GO
+
+-- Procedimiento para PAGO_RESERVA
+CREATE PROCEDURE REGISTRARPAGORESERVA
+    @ID CHAR(6),
+    @ID_RESERVA CHAR(6),
+    @MONTO_PAGO DECIMAL(10,2),
+    @METODO_PAGO NVARCHAR(50),
+    @NUM_COMPROBANTE NVARCHAR(100)
+AS
+BEGIN
+    INSERT INTO PAGO_RESERVA (id_pago_reserva, id_reserva, monto_pago, metodo_pago, num_comprobante)
+    VALUES (@ID, @ID_RESERVA, @MONTO_PAGO, @METODO_PAGO, @NUM_COMPROBANTE);
+END;
+
+CREATE PROCEDURE REGISTRARALQUILER
+    @ID CHAR(6),
+    @ID_TURISTA CHAR(6),
+    @ID_USR_GESTOR CHAR(6),
+    @FECHA_INICIO DATETIME,
+    @DURACION_HORAS INT,
+    @COSTO_TOTAL DECIMAL(10,2),
+    @ESTADOALQUILER NVARCHAR(20),
+    @ID_RESERVA CHAR(6) = NULL,
+    @ID_PROMOCION CHAR(7) = NULL
+AS BEGIN
+    INSERT INTO ALQUILER (
+        id_alquiler, id_turista, id_usuario_gestor, fecha_hora_inicio,
+        duracion_horas, costo_total, estadoalquiler, id_reserva, id_promocion
+    ) VALUES (
+        @ID, @ID_TURISTA, @ID_USR_GESTOR, @FECHA_INICIO,
+        @DURACION_HORAS, @COSTO_TOTAL, @ESTADOALQUILER, @ID_RESERVA, @ID_PROMOCION
+    );
+END;
+GO
+
+CREATE PROCEDURE REGISTRARDETALLEALQUILER
+    @ID CHAR(6), @ID_ALQUILER CHAR(6), @ID_RECURSO CHAR(6),
+    @HORAS_REALIZADAS INT, @COSTO_PARCIAL DECIMAL(10,2)
+AS BEGIN
+    INSERT INTO DETALLE_ALQUILER VALUES (@ID, @ID_ALQUILER, @ID_RECURSO, @HORAS_REALIZADAS, @COSTO_PARCIAL);
+END;
+GO
+
+-- Procedimiento para PAGO
+CREATE PROCEDURE REGISTRARPAGO
+    @ID CHAR(6),
+    @ID_ALQUILER CHAR(6),
+    @SUBTOTAL DECIMAL(10,2),
+    @DESCUENTO_APLICADO DECIMAL(10,2),
+    @TOTAL_FINAL DECIMAL(10,2),
+    @MONTO_PAGADO DECIMAL(10,2),
+    @NUM_BOLETA NVARCHAR(50),
+    @METODO_PAGO NVARCHAR(50)
+AS
+BEGIN
+    INSERT INTO PAGO (id_pago, id_alquiler, subtotal, descuento_aplicado, total_final, monto_pagado, num_boleta, metodo_pago)
+    VALUES (@ID, @ID_ALQUILER, @SUBTOTAL, @DESCUENTO_APLICADO, @TOTAL_FINAL, @MONTO_PAGADO, @NUM_BOLETA, @METODO_PAGO);
+END;

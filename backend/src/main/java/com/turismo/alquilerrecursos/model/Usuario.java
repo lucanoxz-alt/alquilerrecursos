@@ -1,6 +1,7 @@
 package com.turismo.alquilerrecursos.model;
 
 import jakarta.persistence.*;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 @Entity
 @Table(name = "USUARIO")
@@ -20,6 +21,7 @@ public class Usuario {
     private String username;
 
     @Column(name = "password", length = 255, nullable = false)
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
     private String password;
 
     @Column(name = "rol", length = 50, nullable = false)
@@ -31,6 +33,8 @@ public class Usuario {
     @Column(name = "telefono", length = 20)
     private String telefono;
 
+    @Column(name = "estado_usuario", length = 20)
+    private String estadoUsuario;
     public Usuario() {}
 
     public String getIdUsuario() { return idUsuario; }
@@ -56,4 +60,7 @@ public class Usuario {
 
     public String getTelefono() { return telefono; }
     public void setTelefono(String telefono) { this.telefono = telefono; }
+
+    public String getEstadoUsuario() { return estadoUsuario; }
+    public void setEstadoUsuario(String estadoUsuario) { this.estadoUsuario = estadoUsuario; }
 }

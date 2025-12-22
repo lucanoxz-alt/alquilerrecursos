@@ -6,7 +6,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
@@ -46,18 +45,23 @@ public class PromocionService {
         if (promocion.getIdPromocion() == null || promocion.getIdPromocion().isEmpty()) {
             String ultimoId = obtenerUltimoIdPromocion();
             if (ultimoId == null) {
-                promocion.setIdPromocion("PROMO001");
+                // Ajuste: la columna es CHAR(7), usar prefijo de 4 letras "PROM" + 3 dígitos
+                promocion.setIdPromocion("PROM001");
             } else {
-                int numero = Integer.parseInt(ultimoId.substring(5));
+                // Suponemos formato "PROM###" (7 caracteres)
+                int numero;
+                try {
+                    numero = Integer.parseInt(ultimoId.substring(4));
+                } catch (NumberFormatException ex) {
+                    // Si el formato no coincide, reiniciar la secuencia con 1
+                    numero = 0;
+                }
                 numero++;
-                promocion.setIdPromocion(String.format("PROMO%03d", numero));
+                promocion.setIdPromocion(String.format("PROM%03d", numero));
             }
         }
 
-        // Validar fechas
-        if (promocion.getFechaInicio().isAfter(promocion.getFechaFin())) {
-            throw new RuntimeException("La fecha de inicio no puede ser posterior a la fecha de fin");
-        }
+        // Las fechas ya no están en el modelo, validación removida
 
         // Validar porcentaje de descuento
         if (promocion.getPorcentajeDesc().doubleValue() <= 0 || promocion.getPorcentajeDesc().doubleValue() > 100) {
@@ -77,8 +81,7 @@ public class PromocionService {
                     promocion.setNombre(promocionActualizada.getNombre());
                     promocion.setDescripcion(promocionActualizada.getDescripcion());
                     promocion.setPorcentajeDesc(promocionActualizada.getPorcentajeDesc());
-                    promocion.setFechaInicio(promocionActualizada.getFechaInicio());
-                    promocion.setFechaFin(promocionActualizada.getFechaFin());
+                    // fechaInicio y fechaFin ya no existen en el modelo
                     promocion.setCondicionMinima(promocionActualizada.getCondicionMinima());
                     promocion.setActiva(promocionActualizada.getActiva());
                     return promocionRepository.save(promocion);
@@ -112,23 +115,12 @@ public class PromocionService {
     }
 
     /**
-     * Verificar si una promoción es válida en una fecha específica
+     * Verificar si una promoción es válida (solo verifica que esté activa)
      */
-    public boolean esPromocionValida(String idPromocion, LocalDate fecha) {
+    public boolean esPromocionValida(String idPromocion) {
         return promocionRepository.findById(idPromocion)
-                .map(promocion -> 
-                    promocion.getActiva() && 
-                    !fecha.isBefore(promocion.getFechaInicio()) && 
-                    !fecha.isAfter(promocion.getFechaFin())
-                )
+                .map(Promocion::getActiva)
                 .orElse(false);
-    }
-
-    /**
-     * Obtener promociones válidas para una fecha específica
-     */
-    public List<Promocion> obtenerPromocionesValidasParaFecha(LocalDate fecha) {
-        return promocionRepository.findPromocionesValidasParaFecha(fecha);
     }
 
     /**

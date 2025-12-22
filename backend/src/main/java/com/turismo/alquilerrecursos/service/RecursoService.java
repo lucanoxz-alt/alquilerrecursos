@@ -112,7 +112,7 @@ public class RecursoService {
         if (recursoOpt.isPresent()) {
             Recurso recurso = recursoOpt.get();
             // Solo permitir eliminar si está disponible
-            if (!"Disponible".equals(recurso.getEstado())) {
+            if (!"Disponible".equalsIgnoreCase(recurso.getEstado())) {
                 throw new RuntimeException("No se puede eliminar un recurso que no está disponible");
             }
             recursoRepository.deleteById(idRecurso);
@@ -132,7 +132,7 @@ public class RecursoService {
                     if (!esEstadoValido(nuevoEstado)) {
                         throw new RuntimeException("Estado no válido: " + nuevoEstado);
                     }
-                    recurso.setEstado(nuevoEstado);
+                    recurso.setEstado(normalizarEstado(nuevoEstado));
                     return recursoRepository.save(recurso);
                 })
                 .orElseThrow(() -> new RuntimeException("Recurso no encontrado: " + idRecurso));
@@ -162,11 +162,23 @@ public class RecursoService {
      * Método auxiliar para validar estados
      */
     private boolean esEstadoValido(String estado) {
-        return estado != null && 
-               ("Disponible".equals(estado) || 
-                "Alquilado".equals(estado) || 
-                "Reservado".equals(estado) || 
-                "Mantenimiento".equals(estado));
+        if (estado == null) return false;
+        String e = estado.trim().toLowerCase();
+        return e.equals("disponible") || e.equals("alquilado") || e.equals("reservado") || e.equals("mantenimiento") || e.equals("fuera de servicio") || e.equals("fuera_servicio");
+    }
+
+    private String normalizarEstado(String estado) {
+        if (estado == null) return "Disponible";
+        String e = estado.trim().toLowerCase();
+        switch (e) {
+            case "disponible": return "Disponible";
+            case "alquilado": return "Alquilado";
+            case "reservado": return "Reservado";
+            case "mantenimiento": return "Mantenimiento";
+            case "fuera de servicio":
+            case "fuera_servicio": return "Fuera de Servicio";
+            default: return "Disponible";
+        }
     }
 
     /**

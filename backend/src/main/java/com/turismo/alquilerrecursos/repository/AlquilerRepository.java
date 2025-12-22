@@ -8,4 +8,5 @@ import java.util.List;
 @Repository
 public interface AlquilerRepository extends JpaRepository<Alquiler, String> {
     List<Alquiler> findByEstadoalquiler(String estadoalquiler);
+    List<Alquiler> findByIdTurista(String idTurista);
 }

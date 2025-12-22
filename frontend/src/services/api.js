@@ -11,15 +11,27 @@ const api = axios.create({
 // Interceptor para agregar el token en cada petición
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('authToken'); // <-- Asegúrate que coincida con el nombre que guardas
+    // Buscar token en múltiples ubicaciones para robustez
+    const tryParse = (v) => { try { return JSON.parse(v); } catch { return null; } };
+
+    let token = null;
+    // 1) Storage claves comunes
+    token = token || localStorage.getItem('authToken') || localStorage.getItem('token');
+    token = token || sessionStorage.getItem('authToken') || sessionStorage.getItem('token');
+
+    // 2) Estructuras tipo userData
+    const lsUser = tryParse(localStorage.getItem('userData')) || {};
+    const ssUser = tryParse(sessionStorage.getItem('userData')) || {};
+    token = token || lsUser.token || lsUser.accessToken || lsUser.jwt || lsUser.idToken;
+    token = token || ssUser.token || ssUser.accessToken || ssUser.jwt || ssUser.idToken;
+
     if (token) {
+      config.headers = config.headers || {};
       config.headers.Authorization = `Bearer ${token}`;
     }
     return config;
   },
-  (error) => {
-    return Promise.reject(error);
-  }
+  (error) => Promise.reject(error)
 );
 
 // Interceptor para manejar respuestas (ej: errores 401)
@@ -27,23 +39,9 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response && error.response.status === 401) {
-      // Solo limpiar tokens si NO estamos en el endpoint de login
+      // Evitar redirección automática al presionar botones en admin; deja que la UI maneje el error
       if (!error.config.url?.includes('/auth/login')) {
-        const currentPath = window.location.pathname;
-        const isMaintenancePage = currentPath.includes('/admin/mantenimiento/');
-        
-        // Si estamos en páginas de mantenimiento, solo loguear sin redireccionar
-        if (isMaintenancePage) {
-          console.warn('Endpoint no disponible o sin permisos:', error.config?.url);
-        } else {
-          console.error('Token inválido o expirado. Limpiando sesión.');
-          localStorage.removeItem('authToken');
-          localStorage.removeItem('userData');
-          // Redirigir a login solo si no estamos ya en login
-          if (!window.location.pathname.includes('/login')) {
-            window.location.href = '/login';
-          }
-        }
+        console.warn('401 no autorizado en', error.config?.url);
       }
     }
     return Promise.reject(error);
@@ -119,7 +117,54 @@ export const alquilerService = {
   }
 };
 
-// Servicios para reservas
+// Servicios para alquileres (extendido)
+export const alquilerServiceExtended = {
+  // Obtener todos los alquileres
+  obtenerTodos: async () => {
+    try {
+      const response = await api.get('/alquileres');
+      return response.data;
+    } catch (error) {
+      console.error('Error obteniendo alquileres:', error);
+      throw error;
+    }
+  },
+
+  // Obtener alquiler por ID
+  obtenerPorId: async (idAlquiler) => {
+    try {
+      const response = await api.get(`/alquileres/${idAlquiler}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error obteniendo alquiler:', error);
+      throw error;
+    }
+  },
+
+  // Obtener alquileres por turista
+  obtenerPorTurista: async (idTurista) => {
+    try {
+      const response = await api.get(`/alquileres/turista/${idTurista}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error obteniendo alquileres por turista:', error);
+      throw error;
+    }
+  },
+
+  // Obtener alquileres activos
+  obtenerActivos: async () => {
+    try {
+      const response = await api.get('/alquileres/activos');
+      return response.data;
+    } catch (error) {
+      console.error('Error obteniendo alquileres activos:', error);
+      throw error;
+    }
+  }
+};
+
+// Servicios para reservas (extendido)
 export const reservaService = {
   // Crear reserva
   crear: async (reservaData) => {
@@ -128,6 +173,50 @@ export const reservaService = {
       return response.data;
     } catch (error) {
       console.error('Error creando reserva:', error);
+      throw error;
+    }
+  },
+
+  // Obtener todas las reservas
+  obtenerTodas: async () => {
+    try {
+      const response = await api.get('/reserva');
+      return response.data;
+    } catch (error) {
+      console.error('Error obteniendo reservas:', error);
+      throw error;
+    }
+  },
+
+  // Obtener reserva por ID
+  obtenerPorId: async (idReserva) => {
+    try {
+      const response = await api.get(`/reserva/${idReserva}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error obteniendo reserva:', error);
+      throw error;
+    }
+  },
+
+  // Obtener reservas por estado
+  obtenerPorEstado: async (estado) => {
+    try {
+      const response = await api.get(`/reserva/estado/${estado}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error obteniendo reservas por estado:', error);
+      throw error;
+    }
+  },
+
+  // Confirmar reserva
+  confirmar: async (idReserva) => {
+    try {
+      const response = await api.put(`/reserva/${idReserva}/confirmar`);
+      return response.data;
+    } catch (error) {
+      console.error('Error confirmando reserva:', error);
       throw error;
     }
   },
@@ -142,6 +231,183 @@ export const reservaService = {
       return response.data;
     } catch (error) {
       console.error('Error cancelando reserva:', error);
+      throw error;
+    }
+  }
+};
+
+// Servicios para turistas
+export const turistaService = {
+  // Crear turista
+  crear: async (turistaData) => {
+    try {
+      const response = await api.post('/turistas', turistaData);
+      return response.data;
+    } catch (error) {
+      console.error('Error creando turista:', error);
+      throw error;
+    }
+  },
+
+  // Obtener todos los turistas
+  obtenerTodos: async () => {
+    try {
+      const response = await api.get('/turistas');
+      return response.data;
+    } catch (error) {
+      console.error('Error obteniendo turistas:', error);
+      throw error;
+    }
+  },
+
+  // Buscar turistas
+  buscar: async (query) => {
+    try {
+      const response = await api.get('/turistas/buscar', { params: { query } });
+      return response.data;
+    } catch (error) {
+      console.error('Error buscando turistas:', error);
+      throw error;
+    }
+  },
+
+  // Obtener turista por ID
+  obtenerPorId: async (idTurista) => {
+    try {
+      const response = await api.get(`/turistas/${idTurista}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error obteniendo turista:', error);
+      throw error;
+    }
+  },
+
+  // Actualizar turista
+  actualizar: async (idTurista, turistaData) => {
+    try {
+      const response = await api.put(`/turistas/${idTurista}`, turistaData);
+      return response.data;
+    } catch (error) {
+      console.error('Error actualizando turista:', error);
+      throw error;
+    }
+  },
+
+  // Eliminar turista
+  eliminar: async (idTurista) => {
+    try {
+      await api.delete(`/turistas/${idTurista}`);
+      return true;
+    } catch (error) {
+      console.error('Error eliminando turista:', error);
+      throw error;
+    }
+  }
+};
+
+// Servicios para promociones
+export const promocionService = {
+  // Obtener todas las promociones
+  obtenerTodas: async () => {
+    try {
+      const response = await api.get('/promociones');
+      return response.data;
+    } catch (error) {
+      console.error('Error obteniendo promociones:', error);
+      throw error;
+    }
+  },
+
+  // Obtener promociones activas
+  obtenerActivas: async () => {
+    try {
+      const response = await api.get('/promociones/activas');
+      return response.data;
+    } catch (error) {
+      console.error('Error obteniendo promociones activas:', error);
+      throw error;
+    }
+  },
+
+  // Crear promoción
+  crear: async (promocionData) => {
+    try {
+      const response = await api.post('/promociones', promocionData);
+      return response.data;
+    } catch (error) {
+      console.error('Error creando promoción:', error);
+      throw error;
+    }
+  },
+
+  // Actualizar promoción
+  actualizar: async (idPromocion, promocionData) => {
+    try {
+      const response = await api.put(`/promociones/${idPromocion}`, promocionData);
+      return response.data;
+    } catch (error) {
+      console.error('Error actualizando promoción:', error);
+      throw error;
+    }
+  },
+
+  // Eliminar promoción
+  eliminar: async (idPromocion) => {
+    try {
+      await api.delete(`/promociones/${idPromocion}`);
+      return true;
+    } catch (error) {
+      console.error('Error eliminando promoción:', error);
+      throw error;
+    }
+  },
+
+  // Activar/Desactivar promoción (toggle)
+  toggle: async (idPromocion) => {
+    try {
+      const response = await api.put(`/promociones/${idPromocion}/toggle`);
+      return response.data;
+    } catch (error) {
+      console.error('Error toggling promoción:', error);
+      throw error;
+    }
+  },
+
+  // Buscar promociones
+  buscar: async (query) => {
+    try {
+      const response = await api.get(`/promociones/buscar?q=${encodeURIComponent(query)}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error buscando promociones:', error);
+      throw error;
+    }
+  }
+};
+
+// Servicios para recursos
+export const recursoService = {
+  // Obtener todos los recursos
+  obtenerTodos: async () => {
+    try {
+      const response = await api.get('/recursos');
+      return response.data;
+    } catch (error) {
+      console.error('Error obteniendo recursos:', error);
+      throw error;
+    }
+  }
+};
+
+// Servicios para pagos
+export const pagoService = {
+  // Obtener resumen del día
+  obtenerResumenHoy: async () => {
+    try {
+      const response = await api.get('/pagos/resumen/hoy');
+      return response.data;
+    } catch (error) {
+      console.error('Error obteniendo resumen de pagos:', error);
       throw error;
     }
   }

@@ -26,9 +26,9 @@ export default function Sidebar({ user, onLogout }) {
 
   return (
     <div className="w-64 bg-gray-900 text-white min-h-screen p-6">
-      <div className="flex items-center mb-8">
-        <img src="/logo-turismo.svg" alt="SGART" className="w-10 h-10 mr-3" />
-        <h1 className="text-xl font-bold">SGART</h1>
+      <div className="flex items-center mb-8 gap-3">
+        <img src="/favicon.svg" alt="Adventure ATV" className="w-10 h-10" />
+        <h1 className="text-2xl font-bold leading-none">SGART</h1>
       </div>
       <nav className="space-y-2">
         {menuItems.map((item) => {

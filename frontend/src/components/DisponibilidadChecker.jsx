@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Card } from './ui/Card';
-import { disponibilidadService } from '../services/api';
+import { Card } from '@/components/ui';
+import { disponibilidadService } from '@/services/api';
 
 const DisponibilidadChecker = ({ 
   recursoSeleccionado, 

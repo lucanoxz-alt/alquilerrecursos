@@ -1,7 +1,7 @@
 // src/pages/admin/GestionarAlquileres/components/FormularioNuevoCliente.jsx
 import React, { useState } from 'react';
 import { X, User, Users, CreditCard, Globe, Phone, Mail } from 'lucide-react';
-import api from '@/services/api';
+import { turistaService } from '../../../../services/api';
 
 const FormularioNuevoCliente = ({ onClose, onSuccess }) => {
   const [newClientData, setNewClientData] = useState({
@@ -21,10 +21,10 @@ const FormularioNuevoCliente = ({ onClose, onSuccess }) => {
   const handleCreateClient = async (e) => {
     e.preventDefault();
     try {
-      const response = await api.post('/turistas', newClientData);
+      const nuevoCliente = await turistaService.crear(newClientData);
       alert('Cliente creado exitosamente!');
-      console.log('Cliente creado:', response.data);
-      onSuccess(response.data);
+      console.log('Cliente creado:', nuevoCliente);
+      onSuccess(nuevoCliente);
       setNewClientData({
         nombres: '',
         apellidos: '',
@@ -36,7 +36,8 @@ const FormularioNuevoCliente = ({ onClose, onSuccess }) => {
       onClose();
     } catch (error) {
       console.error('Error al crear cliente:', error);
-      alert('Error al crear el cliente. Por favor, intente nuevamente.');
+      const errorMessage = error.response?.data || 'Error al crear el cliente. Por favor, intente nuevamente.';
+      alert(errorMessage);
     }
   };
 

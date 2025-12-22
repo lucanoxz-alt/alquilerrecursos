@@ -47,16 +47,52 @@ const GestionRecursos = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
+      const mapEstadoToBackend = (e) => {
+        // Mapear tokens de select a los valores canónicos esperados por el backend
+        if (!e) return 'Disponible';
+        switch (e) {
+          case 'disponible': return 'Disponible';
+          case 'alquilado': return 'Alquilado';
+          case 'reservado': return 'Reservado';
+          case 'mantenimiento': return 'Mantenimiento';
+          case 'fuera_servicio': return 'Fuera de Servicio';
+          default: return e;
+        }
+      };
+
       const dataToSend = {
         ...formData,
         tarifaHora: parseFloat(formData.tarifaHora)
       };
-      
+
       if (editingResource) {
-        await api.put(`/recursos/${editingResource.idRecurso}`, dataToSend);
+        // Actualizar campos generales sin enviar 'estado' (backend requiere endpoint específico)
+        const { estado, ...dataWithoutEstado } = dataToSend;
+        await api.put(`/recursos/${editingResource.idRecurso}`, dataWithoutEstado);
+
+        // Si el estado cambió, usar endpoint específico
+        const prevRaw = (editingResource.estado || '').toString().trim().toLowerCase();
+        const prevToken = (prevRaw === 'fuera de servicio') ? 'fuera_servicio' : (prevRaw || 'disponible');
+        if ((formData.estado || 'disponible') !== prevToken) {
+          try {
+            const nuevoEstadoCanonico = mapEstadoToBackend(formData.estado);
+            await api.put(`/recursos/${editingResource.idRecurso}/estado`, { estado: nuevoEstadoCanonico });
+            // Actualización optimista en UI
+            setRecursos(prev => prev.map(r => r.idRecurso === editingResource.idRecurso ? { ...r, estado: nuevoEstadoCanonico } : r));
+          } catch (err) {
+            console.error('Error al actualizar estado del recurso:', err);
+            const msg = err?.response?.data || err.message || 'Error desconocido';
+            alert('No se pudo actualizar el estado del recurso: ' + msg);
+            throw err;
+          }
+        }
       } else {
-        await api.post('/recursos', dataToSend);
+        // Crear recurso incluyendo estado
+        const creado = await api.post('/recursos', { ...dataToSend, estado: mapEstadoToBackend(formData.estado) }).then(r => r.data);
+        // Inserción optimista en la lista
+        if (creado) setRecursos(prev => [creado, ...prev]);
       }
+
       setShowModal(false);
       setEditingResource(null);
       resetForm();
@@ -68,11 +104,20 @@ const GestionRecursos = () => {
 
   const handleEdit = (recurso) => {
     setEditingResource(recurso);
+    const estadoToken = (() => {
+      const raw = (recurso.estado || '').toString().trim().toLowerCase();
+      if (raw === 'disponible') return 'disponible';
+      if (raw === 'alquilado') return 'alquilado';
+      if (raw === 'reservado') return 'reservado';
+      if (raw === 'mantenimiento') return 'mantenimiento';
+      if (raw === 'fuera de servicio') return 'fuera_servicio';
+      return 'disponible';
+    })();
     setFormData({
       nombre: recurso.nombre || '',
       descripcion: recurso.descripcion || '',
       tarifaHora: recurso.tarifaHora || '',
-      estado: recurso.estado || 'disponible',
+      estado: estadoToken,
       ubicacion: recurso.ubicacion || '',
       idTipo: recurso.idTipo || ''
     });
@@ -105,10 +150,16 @@ const GestionRecursos = () => {
     const estados = {
       'disponible': { color: 'bg-green-100 text-green-800', label: 'Disponible' },
       'alquilado': { color: 'bg-red-100 text-red-800', label: 'Alquilado' },
+      'reservado': { color: 'bg-blue-100 text-blue-800', label: 'Reservado' },
       'mantenimiento': { color: 'bg-yellow-100 text-yellow-800', label: 'Mantenimiento' },
-      'fuera_servicio': { color: 'bg-gray-100 text-gray-800', label: 'Fuera de Servicio' }
+      'fuera_servicio': { color: 'bg-gray-100 text-gray-800', label: 'Fuera de Servicio' },
+      'fuera_de_servicio': { color: 'bg-gray-100 text-gray-800', label: 'Fuera de Servicio' }
     };
-    const estadoInfo = estados[estado] || estados['disponible'];
+    // Normalizar: espacios -> guion bajo, múltiples guion bajo -> uno
+    let key = (estado || '').toString().trim().toLowerCase().replace(/\s+/g, '_').replace(/_+/g, '_');
+    // Aceptar ambas variantes
+    if (key === 'fuera_de_servicio') key = 'fuera_servicio';
+    const estadoInfo = estados[key] || estados['disponible'];
     return (
       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${estadoInfo.color}`}>
         {estadoInfo.label}
@@ -130,7 +181,7 @@ const GestionRecursos = () => {
             <Package className="w-8 h-8 mr-3 text-green-600" />
             Gestión de Recursos
           </h1>
-          <p className="text-gray-600 mt-2">Administra los recursos turísticos disponibles</p>
+          <p className="text-gray-600 mt-2">Administra los recursos turísticos</p>
         </div>
         <button
           onClick={() => setShowModal(true)}
@@ -178,9 +229,9 @@ const GestionRecursos = () => {
 
                 <div className="space-y-2 mb-4">
                   <div className="flex items-center text-sm text-gray-600">
-                    <DollarSign className="h-4 w-4 mr-2 text-green-500" />
+                    <span className="h-4 w-4 mr-2 text-green-600 font-semibold">S/.</span>
                     <span className="font-medium text-green-600">
-                      S/. {parseFloat(recurso.tarifaHora || 0).toFixed(2)}/hora
+                      {parseFloat(recurso.tarifaHora || 0).toFixed(2)}/hora
                     </span>
                   </div>
                   
@@ -274,7 +325,7 @@ const GestionRecursos = () => {
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Tarifa por Hora *</label>
                   <div className="relative">
-                    <DollarSign className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" />
+                    <span className="absolute left-3 top-2.5 h-5 w-5 text-gray-500 text-sm font-semibold">S/.</span>
                     <input
                       type="number"
                       step="0.01"
@@ -295,10 +346,9 @@ const GestionRecursos = () => {
                     value={formData.estado}
                     onChange={(e) => setFormData({...formData, estado: e.target.value})}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                  >
-                    <option value="disponible">Disponible</option>
-                    <option value="alquilado">Alquilado</option>
-                    <option value="mantenimiento">Mantenimiento</option>
+>
+                    <option value="disponible">Disponible</option>                    <option value="alquilado">Alquilado</option>
+                    <option value="reservado">Reservado</option>                    <option value="mantenimiento">Mantenimiento</option>
                     <option value="fuera_servicio">Fuera de Servicio</option>
                   </select>
                 </div>

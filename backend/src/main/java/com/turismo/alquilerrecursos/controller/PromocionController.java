@@ -100,33 +100,25 @@ public class PromocionController {
     }
 
     /**
-     * Obtener promociones válidas para una fecha
+     * Obtener promociones válidas (solo activas)
      */
     @GetMapping("/validas-para-fecha")
     public ResponseEntity<List<Promocion>> obtenerPromocionesValidasParaFecha(
-            @RequestParam String fecha) {
-        try {
-            LocalDate fechaConsulta = LocalDate.parse(fecha);
-            List<Promocion> promociones = promocionService.obtenerPromocionesValidasParaFecha(fechaConsulta);
-            return ResponseEntity.ok(promociones);
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().build();
-        }
+            @RequestParam(required = false) String fecha) {
+        // Como ya no hay fechas en el modelo, retornamos promociones activas
+        List<Promocion> promociones = promocionService.obtenerPromocionesActivas();
+        return ResponseEntity.ok(promociones);
     }
 
     /**
-     * Verificar si una promoción es válida
+     * Verificar si una promoción es válida (solo verifica si está activa)
      */
     @GetMapping("/{idPromocion}/es-valida")
     public ResponseEntity<Boolean> esPromocionValida(
             @PathVariable String idPromocion,
             @RequestParam(required = false) String fecha) {
-        try {
-            LocalDate fechaConsulta = fecha != null ? LocalDate.parse(fecha) : LocalDate.now();
-            boolean esValida = promocionService.esPromocionValida(idPromocion, fechaConsulta);
-            return ResponseEntity.ok(esValida);
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().build();
-        }
+        // Como ya no hay fechas en el modelo, solo verificamos si está activa
+        boolean esValida = promocionService.esPromocionValida(idPromocion);
+        return ResponseEntity.ok(esValida);
     }
 }

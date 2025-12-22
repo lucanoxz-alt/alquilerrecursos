@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Card } from './ui/Card';
-import { Button } from './ui/Button';
-import DisponibilidadChecker from './DisponibilidadChecker';
-import { disponibilidadService } from '../services/api';
+import { Card, Button } from '@/components/ui';
+import DisponibilidadChecker from '@/components/DisponibilidadChecker';
+import { disponibilidadService } from '@/services/api';
 
 const SeleccionRecursosConValidacion = ({ 
   onRecursosSeleccionados, 

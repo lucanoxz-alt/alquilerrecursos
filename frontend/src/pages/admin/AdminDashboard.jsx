@@ -1,6 +1,6 @@
 // src/pages/admin/AdminDashboard.jsx
 import React, { useState, useEffect } from 'react';
-import { Package, DollarSign, Users, MapPin, Plus, Search, Edit, Trash2, Filter, RefreshCw } from 'lucide-react';
+import { Package, DollarSign, Users, MapPin, Plus, Search, Edit, Trash2, Filter, RefreshCw, FileText } from 'lucide-react';
 
 const AdminDashboard = ({ user }) => {
   const [stats, setStats] = useState({
@@ -12,28 +12,108 @@ const AdminDashboard = ({ user }) => {
   const [alquileres, setAlquileres] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Simular la carga de datos del dashboard
+  // Función para ver boleta
+  const verBoleta = (idAlquiler) => {
+    const url = `http://localhost:8080/api/boletas/${idAlquiler}/html`;
+    window.open(url, '_blank', 'width=800,height=600,scrollbars=yes');
+  };
+
+  // Cargar datos reales del dashboard
   useEffect(() => {
-    const cargarDatos = async () => {
-      // Datos simulados
-      setStats({
-        totalAlquileres: 124,
-        ingresosTotales: 24560,
-        clientesActivos: 89,
-        recursosDisponibles: 42
-      });
+    const cargarDatosReales = async () => {
+      setLoading(true);
+      try {
+        // Obtener token para autenticación
+        const userData = localStorage.getItem('userData');
+        let token = localStorage.getItem('authToken');
+        
+        if (!token && userData) {
+          try {
+            const parsed = JSON.parse(userData);
+            token = parsed.token;
+          } catch (e) {
+            token = null;
+          }
+        }
+        
+        const headers = token ? {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        } : { 'Content-Type': 'application/json' };
 
-      setAlquileres([
-        { id: 'ALQ001', cliente: 'Carlos ApellidoCarlos', recurso: 'Cuatrimoto Todo Terreno', fecha: '2025-10-20', monto: 220.00, estado: 'Finalizado' },
-        { id: 'ALQ002', cliente: 'Ana ApellidoAna', recurso: 'Cuatrimoto TT + Moto Acuática', fecha: '2025-10-28', monto: 220.00, estado: 'Activo' },
-        { id: 'ALQ003', cliente: 'María ApellidoMaría', recurso: 'Kitesurf', fecha: '2025-10-21', monto: 324.00, estado: 'Finalizado' },
-        { id: 'ALQ004', cliente: 'James ApellidoJames', recurso: 'Moto Acuática', fecha: '2025-10-22', monto: 100.00, estado: 'Activo' },
-      ]);
+        // Cargar datos reales en paralelo
+        const [alquileresRes, turistasRes, recursosRes] = await Promise.allSettled([
+          fetch('http://localhost:8080/api/alquileres', { headers }),
+          fetch('http://localhost:8080/api/turistas', { headers }),
+          fetch('http://localhost:8080/api/recursos', { headers })
+        ]);
 
-      setLoading(false);
+        let alquileresData = [];
+        let turistasData = [];
+        let recursosData = [];
+
+        // Procesar respuestas
+        if (alquileresRes.status === 'fulfilled' && alquileresRes.value.ok) {
+          alquileresData = await alquileresRes.value.json();
+        }
+        if (turistasRes.status === 'fulfilled' && turistasRes.value.ok) {
+          turistasData = await turistasRes.value.json();
+        }
+        if (recursosRes.status === 'fulfilled' && recursosRes.value.ok) {
+          recursosData = await recursosRes.value.json();
+        }
+
+        // Configurar estadísticas reales
+        const statsReales = {
+          totalAlquileres: alquileresData.length || 0,
+          ingresosTotales: alquileresData.reduce((sum, alq) => sum + (alq.costoTotal || 0), 0),
+          clientesActivos: turistasData.length || 0,
+          recursosDisponibles: recursosData.filter(r => r.estado === 'Disponible').length || 0
+        };
+
+        // Mapear alquileres más recientes (últimos 5)
+        const alquileresRecientes = alquileresData
+          .sort((a, b) => new Date(b.fechaHoraInicio) - new Date(a.fechaHoraInicio))
+          .slice(0, 5)
+          .map(alq => {
+            // Buscar turista real
+            const turista = turistasData.find(t => t.idTurista === alq.idTurista);
+            const nombreCliente = turista ? 
+              `${turista.nombres} ${turista.apellidos}` : 
+              `Cliente ${alq.idTurista}`;
+
+            return {
+              id: alq.idAlquiler,
+              cliente: nombreCliente,
+              recurso: `${alq.detalles?.length || 1} recurso${alq.detalles?.length > 1 ? 's' : ''}`,
+              fecha: new Date(alq.fechaHoraInicio).toLocaleDateString('es-PE'),
+              monto: alq.costoTotal || 0,
+              estado: alq.estadoalquiler
+            };
+          });
+
+        setStats(statsReales);
+        setAlquileres(alquileresRecientes);
+        
+      } catch (error) {
+        // Fallback con datos básicos si hay error
+        setStats({
+          totalAlquileres: 0,
+          ingresosTotales: 0,
+          clientesActivos: 0,
+          recursosDisponibles: 0
+        });
+        setAlquileres([]);
+      } finally {
+        setLoading(false);
+      }
     };
 
-    cargarDatos();
+    cargarDatosReales();
+    
+    // Recargar datos cada 30 segundos para mantener actualizado
+    const interval = setInterval(cargarDatosReales, 30000);
+    return () => clearInterval(interval);
   }, []);
 
   // Componente para las tarjetas de estadísticas
@@ -75,6 +155,7 @@ const AdminDashboard = ({ user }) => {
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Monto</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
@@ -96,11 +177,25 @@ const AdminDashboard = ({ user }) => {
                   S/. {alquiler.monto.toFixed(2)}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
-                  <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                    alquiler.estado === 'Activo' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'
+                  <span className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                    alquiler.estado === 'Activo' 
+                      ? 'bg-blue-100 text-blue-800' 
+                      : alquiler.estado === 'Finalizado' 
+                        ? 'bg-green-100 text-green-800' 
+                        : 'bg-gray-100 text-gray-800'
                   }`}>
                     {alquiler.estado}
                   </span>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                  <button 
+                    onClick={() => verBoleta(alquiler.id)}
+                    className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200 shadow-sm hover:shadow-md"
+                    title="Ver boleta del alquiler"
+                  >
+                    <FileText className="w-3 h-3 mr-1" />
+                    Ver Boleta
+                  </button>
                 </td>
               </tr>
             ))}

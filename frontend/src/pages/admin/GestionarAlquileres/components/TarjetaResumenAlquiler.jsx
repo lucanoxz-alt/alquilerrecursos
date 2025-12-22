@@ -10,41 +10,30 @@ const TarjetaResumenAlquiler = ({
   descuento = 0,
   promocionAplicada = null 
 }) => {
-  // Cálculos automáticos basados en los recursos seleccionados
+  // Cálculos por recurso con horas propias
   const calculosAlquiler = useMemo(() => {
-    if (!recursos.length || duracionHoras <= 0) {
-      return {
-        subtotal: 0,
-        total: 0,
-        detalleRecursos: []
-      };
+    if (!recursos.length) {
+      return { subtotal: 0, total: 0, detalleRecursos: [], descuentoCalculado: 0, totalHoras: 0 };
     }
 
     const detalleRecursos = recursos.map(recurso => {
       const tarifa = parseFloat(recurso.tarifaHora || 0);
-      const subtotalRecurso = tarifa * duracionHoras;
-      return {
-        ...recurso,
-        tarifa,
-        subtotalRecurso
-      };
+      const horas = parseInt(recurso.horasSolicitadas, 10) || 1;
+      const subtotalRecurso = tarifa * horas;
+      return { ...recurso, tarifa, horas, subtotalRecurso };
     });
 
     const subtotal = detalleRecursos.reduce((sum, item) => sum + item.subtotalRecurso, 0);
+    const totalHoras = detalleRecursos.reduce((sum, item) => sum + item.horas, 0);
     const descuentoCalculado = promocionAplicada 
       ? (subtotal * (promocionAplicada.porcentajeDescuento / 100))
       : descuento;
     const total = subtotal - descuentoCalculado;
 
-    return {
-      subtotal,
-      total,
-      detalleRecursos,
-      descuentoCalculado
-    };
-  }, [recursos, duracionHoras, descuento, promocionAplicada]);
+    return { subtotal, total, detalleRecursos, descuentoCalculado, totalHoras };
+  }, [recursos, descuento, promocionAplicada]);
 
-  const formularioCompleto = cliente && recursos.length > 0 && duracionHoras > 0;
+  const formularioCompleto = cliente && recursos.length > 0 && calculosAlquiler.totalHoras > 0;
 
   return (
     <div className="space-y-4">
@@ -117,9 +106,7 @@ const TarjetaResumenAlquiler = ({
                     <div className="text-sm font-medium text-blue-700">
                       S/. {recurso.subtotalRecurso.toFixed(2)}
                     </div>
-                    <div className="text-xs text-gray-500">
-                      S/. {recurso.tarifa.toFixed(2)}/h
-                    </div>
+                    <div className="text-xs text-gray-500">S/. {recurso.tarifa.toFixed(2)}/h • {recurso.horas} h</div>
                   </div>
                 </div>
               </div>
@@ -153,7 +140,7 @@ const TarjetaResumenAlquiler = ({
             </div>
             {fechaInicio && (
               <div className="text-xs text-orange-600">
-                Inicio: {new Date(fechaInicio).toLocaleString('es-PE')}
+                Inicio: {new Date(fechaInicio).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', hour12: false })}
               </div>
             )}
           </div>
