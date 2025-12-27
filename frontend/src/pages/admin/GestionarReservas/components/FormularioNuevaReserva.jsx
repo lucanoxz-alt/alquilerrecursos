@@ -1,8 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Card, Button } from '@/components/ui';
 import SeleccionRecursosConValidacion from '@/components/SeleccionRecursosConValidacion';
-import { reservaService, turistaService, promocionService } from '@/services/api';
+import api, { reservaService, turistaService, promocionService, getCurrentUserId } from '@/services/api';
 import { Calendar, User, Clock, Tag, DollarSign } from 'lucide-react';
+import TarjetaResumenReserva from './TarjetaResumenReserva';
+import BusquedaCliente from '../../GestionarAlquileres/components/BusquedaCliente';
+import FormularioNuevoCliente from '../../GestionarAlquileres/components/FormularioNuevoCliente';
+import SeleccionMetodoPago from '../../GestionarAlquileres/components/SeleccionMetodoPago';
 
 const FormularioNuevaReserva = ({ onReservaCreada, onCerrar }) => {
   const [datosReserva, setDatosReserva] = useState({
@@ -10,9 +14,14 @@ const FormularioNuevaReserva = ({ onReservaCreada, onCerrar }) => {
     fechaHoraInicioPrevista: '',
     idPromocion: ''
   });
+  const [duracionHoras, setDuracionHoras] = useState(2);
 
   const [turistas, setTuristas] = useState([]);
   const [promociones, setPromociones] = useState([]);
+  const [busquedaCliente, setBusquedaCliente] = useState('');
+  const [clienteSeleccionado, setClienteSeleccionado] = useState(null);
+  const [mostrarNuevoCliente, setMostrarNuevoCliente] = useState(false);
+  const [metodoPago, setMetodoPago] = useState(null);
   const [recursosValidados, setRecursosValidados] = useState({
     recursos: [],
     valida: false,
@@ -55,7 +64,7 @@ const FormularioNuevaReserva = ({ onReservaCreada, onCerrar }) => {
   };
 
   const validarFormulario = () => {
-    if (!datosReserva.idTurista) {
+    if (!(clienteSeleccionado?.idTurista || datosReserva.idTurista)) {
       return 'Debe seleccionar un turista';
     }
     if (!datosReserva.fechaHoraInicioPrevista) {
@@ -79,16 +88,33 @@ const FormularioNuevaReserva = ({ onReservaCreada, onCerrar }) => {
 
     try {
       const requestData = {
-        idTurista: datosReserva.idTurista,
+        idTurista: clienteSeleccionado?.idTurista || datosReserva.idTurista,
         fechaHoraInicioPrevista: datosReserva.fechaHoraInicioPrevista,
         idPromocion: datosReserva.idPromocion || null,
+        metodoPago: metodoPago || undefined,
+        idUsuarioGestor: getCurrentUserId() || undefined,
         recursos: recursosValidados.recursos.map(recurso => ({
           idRecurso: recurso.idRecurso,
-          horasSolicitadas: 2 // Por defecto 2 horas, puedes hacer esto configurable
+          horasSolicitadas: parseInt(recurso.horasSolicitadas, 10) || parseInt(duracionHoras, 10) || 1
         }))
       };
 
       const reservaCreada = await reservaService.crear(requestData);
+
+      // Descargar comprobante de pago (PDF) del adelanto 50%
+      try {
+        const { data } = await api.get(`/comprobantes-pago-reserva/reserva/${reservaCreada.idReserva}/pdf`, { responseType: 'blob' });
+        const url = URL.createObjectURL(new Blob([data], { type: 'application/pdf' }));
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `comprobante_reserva_${reservaCreada.idReserva}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      } catch (e) {
+        console.warn('Reserva creada, pero no se pudo descargar el comprobante automáticamente:', e);
+      }
       
       if (onReservaCreada) {
         onReservaCreada(reservaCreada);
@@ -112,17 +138,21 @@ const FormularioNuevaReserva = ({ onReservaCreada, onCerrar }) => {
 
   const calcularCostoEstimado = () => {
     if (recursosValidados.recursos.length === 0) return 0;
-    
+
     const costoBase = recursosValidados.recursos.reduce((total, recurso) => {
-      return total + (parseFloat(recurso.tarifaHora) * 2); // 2 horas por defecto
+      const horas = parseInt(recurso.horasSolicitadas, 10) || parseInt(duracionHoras, 10) || 1; // usar horas seleccionadas o duración global
+      return total + (parseFloat(recurso.tarifaHora) * horas);
     }, 0);
 
     // Aplicar descuento de promoción si existe
     if (datosReserva.idPromocion) {
       const promocion = promociones.find(p => p.idPromocion === datosReserva.idPromocion);
       if (promocion) {
-        const descuento = (costoBase * promocion.porcentajeDesc) / 100;
-        return costoBase - descuento;
+        const totalHoras = recursosValidados.recursos.reduce((s, r) => s + (parseInt(r.horasSolicitadas, 10) || parseInt(duracionHoras, 10) || 1), 0);
+        if (totalHoras >= promocion.condicionMinima) {
+          const descuento = (costoBase * promocion.porcentajeDesc) / 100;
+          return costoBase - descuento;
+        }
       }
     }
 
@@ -157,20 +187,30 @@ const FormularioNuevaReserva = ({ onReservaCreada, onCerrar }) => {
               <User className="w-4 h-4 inline mr-1" />
               Turista *
             </label>
-            <select
-              name="idTurista"
-              value={datosReserva.idTurista}
-              onChange={handleInputChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              required
-            >
-              <option value="">Seleccionar turista...</option>
-              {turistas.map((turista) => (
-                <option key={turista.idTurista} value={turista.idTurista}>
-                  {turista.nombre} {turista.apellido} - {turista.dniPasaporte}
-                </option>
-              ))}
-            </select>
+            <BusquedaCliente
+              query={busquedaCliente}
+              onQueryChange={setBusquedaCliente}
+              onClientSelected={(cli) => {
+                setClienteSeleccionado(cli);
+                setDatosReserva(prev => ({ ...prev, idTurista: cli.idTurista }));
+              }}
+              onShowNewClientForm={() => setMostrarNuevoCliente(true)}
+              selectedClient={clienteSeleccionado}
+            />
+            { !datosReserva.fechaHoraInicioPrevista && (
+              <div className="mt-2 text-sm text-gray-600">
+                <strong>Seleccione la fecha y hora de inicio para ver los recursos disponibles en ese momento.</strong>
+              </div>
+            )}
+            {mostrarNuevoCliente && (
+              <FormularioNuevoCliente
+                onClose={() => setMostrarNuevoCliente(false)}
+                onSuccess={(nuevo) => {
+                  setClienteSeleccionado(nuevo);
+                  setDatosReserva(prev => ({ ...prev, idTurista: nuevo.idTurista }));
+                }}
+              />
+            )}
           </div>
 
           <div>
@@ -187,6 +227,17 @@ const FormularioNuevaReserva = ({ onReservaCreada, onCerrar }) => {
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               required
             />
+            <div className="mt-3">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Duración (horas)</label>
+              <input
+                type="number"
+                min={1}
+                max={24}
+                value={duracionHoras}
+                onChange={(e) => setDuracionHoras(Math.max(1, parseInt(e.target.value || '1', 10)))}
+                className="w-32 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
           </div>
 
           <div className="md:col-span-2">
@@ -215,7 +266,7 @@ const FormularioNuevaReserva = ({ onReservaCreada, onCerrar }) => {
       {datosReserva.fechaHoraInicioPrevista && (
         <SeleccionRecursosConValidacion
           fechaInicio={datosReserva.fechaHoraInicioPrevista}
-          duracionHoras={2}
+          duracionHoras={duracionHoras}
           onRecursosSeleccionados={handleRecursosSeleccionados}
         />
       )}
@@ -234,8 +285,8 @@ const FormularioNuevaReserva = ({ onReservaCreada, onCerrar }) => {
               <span className="font-medium text-blue-900">{recursosValidados.recursos.length}</span>
             </div>
             <div className="flex justify-between text-sm">
-              <span className="text-blue-700">Duración:</span>
-              <span className="font-medium text-blue-900">2 horas</span>
+              <span className="text-blue-700">Tiempo de reserva:</span>
+              <span className="font-medium text-blue-900">{new Date(datosReserva.fechaHoraInicioPrevista).toLocaleString()} por {duracionHoras} hora(s)</span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-blue-700">Costo estimado:</span>
@@ -251,29 +302,37 @@ const FormularioNuevaReserva = ({ onReservaCreada, onCerrar }) => {
             </div>
           </div>
 
-          <div className="flex justify-end space-x-3">
-            <Button
-              variant="outline"
-              onClick={() => {
-                setDatosReserva({
-                  idTurista: '',
-                  fechaHoraInicioPrevista: '',
-                  idPromocion: ''
-                });
-                setRecursosValidados({ recursos: [], valida: false, detalles: null });
-                setError('');
+          <div className="flex flex-col gap-3">
+            <div className="text-sm text-gray-700">
+              <div><span className="font-medium">Turista:</span> {clienteSeleccionado?.nombres ? `${clienteSeleccionado.nombres} ${clienteSeleccionado.apellidos || ''}` : (clienteSeleccionado?.idTurista || datosReserva.idTurista || 'No seleccionado')}</div>
+              <div className="mt-1"><span className="font-medium">Recursos:</span> {recursosValidados.recursos.map(r => r.nombre).join(', ') || 'Sin seleccionar'}</div>
+            </div>
+            <SeleccionMetodoPago 
+              onSubmit={(metodo) => {
+                setMetodoPago(metodo);
+                crearReserva();
               }}
-            >
-              Limpiar Todo
-            </Button>
-            
-            <Button
-              variant="primary"
-              onClick={crearReserva}
               disabled={!recursosValidados.valida || enviando}
-            >
-              {enviando ? 'Creando...' : 'Crear Reserva'}
-            </Button>
+              submitLabel=\"Registrar Reserva\"
+            />
+            <div className="flex justify-end space-x-3">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setDatosReserva({
+                    idTurista: '',
+                    fechaHoraInicioPrevista: '',
+                    idPromocion: ''
+                  });
+                  setRecursosValidados({ recursos: [], valida: false, detalles: null });
+                  setClienteSeleccionado(null);
+                  setBusquedaCliente('');
+                  setError('');
+                }}
+              >
+                Limpiar Todo
+              </Button>
+            </div>
           </div>
         </Card>
       )}

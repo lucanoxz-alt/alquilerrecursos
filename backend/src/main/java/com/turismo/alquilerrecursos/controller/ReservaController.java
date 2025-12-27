@@ -52,12 +52,12 @@ public class ReservaController {
     }
 
     @PutMapping("/{idReserva}/confirmar")
-    public ResponseEntity<Reserva> confirmarReserva(@PathVariable String idReserva) {
+    public ResponseEntity<?> confirmarReserva(@PathVariable String idReserva) {
         try {
-            Reserva reserva = reservaService.confirmarReserva(idReserva);
-            return ResponseEntity.ok(reserva);
+            var resp = reservaService.confirmarReserva(idReserva);
+            return ResponseEntity.ok(resp);
         } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().build();
+            return ResponseEntity.badRequest().body(java.util.Map.of("error", e.getMessage()));
         }
     }
 

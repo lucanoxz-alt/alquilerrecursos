@@ -36,6 +36,9 @@ public class Reserva {
     @Column(name = "id_promocion", columnDefinition = "CHAR(7)")
     private String idPromocion;
 
+    @Column(name = "id_usuario_gestor", columnDefinition = "CHAR(6)")
+    private String idUsuarioGestor;
+
     public Reserva() {}
 
     public String getIdReserva() { return idReserva; }
@@ -64,4 +67,7 @@ public class Reserva {
 
     public String getIdPromocion() { return idPromocion; }
     public void setIdPromocion(String idPromocion) { this.idPromocion = idPromocion; }
+
+    public String getIdUsuarioGestor() { return idUsuarioGestor; }
+    public void setIdUsuarioGestor(String idUsuarioGestor) { this.idUsuarioGestor = idUsuarioGestor; }
 }

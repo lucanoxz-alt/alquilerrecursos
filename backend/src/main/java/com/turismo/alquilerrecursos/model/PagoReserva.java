@@ -27,6 +27,9 @@ public class PagoReserva {
     @Column(name = "num_comprobante", length = 100)
     private String numComprobante;
 
+    @Column(name = "descuento_aplicado", precision = 10, scale = 2)
+    private java.math.BigDecimal descuentoAplicado; // Nuevo campo para registrar descuentos en pagos de reserva
+
     public PagoReserva() {}
 
     public String getIdPagoReserva() { return idPagoReserva; }
@@ -46,4 +49,7 @@ public class PagoReserva {
 
     public String getNumComprobante() { return numComprobante; }
     public void setNumComprobante(String numComprobante) { this.numComprobante = numComprobante; }
+
+    public java.math.BigDecimal getDescuentoAplicado() { return descuentoAplicado; }
+    public void setDescuentoAplicado(java.math.BigDecimal descuentoAplicado) { this.descuentoAplicado = descuentoAplicado; }
 }

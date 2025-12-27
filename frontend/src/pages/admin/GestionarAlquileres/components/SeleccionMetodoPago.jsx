@@ -1,7 +1,7 @@
 // src/pages/admin/GestionarAlquileres/components/SeleccionMetodoPago.jsx
 import React, { useState } from 'react';
 
-const SeleccionMetodoPago = ({ onSubmit, disabled = false }) => {
+const SeleccionMetodoPago = ({ onSubmit, disabled = false, submitLabel = 'Registrar Alquiler' }) => {
   const [metodoSeleccionado, setMetodoSeleccionado] = useState(null);
 
   const metodosPago = ['Efectivo', 'Yape', 'Tarjeta', 'Transferencia'];
@@ -43,7 +43,7 @@ const SeleccionMetodoPago = ({ onSubmit, disabled = false }) => {
         disabled={disabled || !metodoSeleccionado}
         className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
       >
-        Registrar Alquiler
+        {submitLabel}
       </button>
     </div>
   );

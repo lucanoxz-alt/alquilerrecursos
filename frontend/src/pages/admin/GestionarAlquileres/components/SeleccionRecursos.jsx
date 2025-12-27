@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Package, Search, Filter, Eye, X, Plus } from 'lucide-react';
 import api, { recursoService, disponibilidadService } from '../../../../services/api';
 
-const SeleccionRecursos = ({ selectedResources, onResourcesChange, fechaInicio, duracionHoras }) => {
+const SeleccionRecursos = ({ selectedResources, onResourcesChange, fechaInicio, duracionHoras, label = 'Recursos a alquilar' }) => {
   const [showFullInterface, setShowFullInterface] = useState(false);
   const [recursos, setRecursos] = useState([]);
   const [recursosRecientes, setRecursosRecientes] = useState([]);
@@ -111,10 +111,11 @@ const SeleccionRecursos = ({ selectedResources, onResourcesChange, fechaInicio, 
 
     // Filtrar por estado
     if (selectedEstado) {
-      if (selectedEstado === 'Disponible') {
-        filtered = filtered.filter(recurso => !availableSet || availableSet.has(recurso.idRecurso));
+      const estado = selectedEstado;
+      if (estado === 'Disponible') {
+        filtered = filtered.filter(recurso => (recurso.estado === 'Disponible') && (!availableSet || availableSet.has(recurso.idRecurso)));
       } else {
-        filtered = filtered.filter(recurso => recurso.estado === selectedEstado);
+        filtered = filtered.filter(recurso => recurso.estado === estado);
       }
     }
 
@@ -135,9 +136,17 @@ const SeleccionRecursos = ({ selectedResources, onResourcesChange, fechaInicio, 
     setFilteredRecursos(filtered);
   };
 
-  const handleResourceToggle = (recurso) => {
+  const [mensajeDisponibilidad, setMensajeDisponibilidad] = useState('');
+
+  const handleResourceToggle = (recurso, isDisponibleOverride = true) => {
     const isSelected = selectedResources.some(r => r.idRecurso === recurso.idRecurso);
     let newSelectedResources;
+
+    if (!isDisponibleOverride) {
+      setMensajeDisponibilidad(`El recurso "${recurso.nombre}" no está disponible en la fecha/hora seleccionada`);
+      setTimeout(() => setMensajeDisponibilidad(''), 4000);
+      return; // bloquear selección
+    }
     
     if (isSelected) {
       newSelectedResources = selectedResources.filter(r => r.idRecurso !== recurso.idRecurso);
@@ -157,6 +166,11 @@ const SeleccionRecursos = ({ selectedResources, onResourcesChange, fechaInicio, 
   if (showFullInterface) {
     return (
       <div className="space-y-4">
+        {mensajeDisponibilidad && (
+          <div className="p-3 bg-red-50 border border-red-200 text-red-800 rounded-lg text-sm">
+            {mensajeDisponibilidad}
+          </div>
+        )}
         {/* Header con botón de cerrar */}
         <div className="flex justify-between items-center">
           <label className="block text-sm font-medium text-gray-700">
@@ -205,6 +219,7 @@ const SeleccionRecursos = ({ selectedResources, onResourcesChange, fechaInicio, 
               <option value="Alquilado">🔴 Alquilado</option>
               <option value="Mantenimiento">🔧 Mantenimiento</option>
               <option value="Reservado">📅 Reservado</option>
+              <option value="Fuera de Servicio">⛔ Fuera de Servicio</option>
             </select>
           </div>
           
@@ -376,7 +391,7 @@ const SeleccionRecursos = ({ selectedResources, onResourcesChange, fechaInicio, 
   return (
     <div className="space-y-4">
       <label className="block text-sm font-medium text-gray-700">
-        Recursos a alquilar <span className="text-red-500">*</span>
+        {label} <span className="text-red-500">*</span>
       </label>
 
       {/* Recursos recientes/sugeridos */}

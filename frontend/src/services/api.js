@@ -2,7 +2,7 @@
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: 'http://localhost:8080/api',
+  baseURL: 'http://localhost:8080/api', // Local backend
   headers: {
     'Content-Type': 'application/json',
   },
@@ -411,6 +411,29 @@ export const pagoService = {
       throw error;
     }
   }
+};
+
+export const getCurrentUserId = () => {
+  // Try to get from userData in storage
+  const tryParse = (v) => { try { return JSON.parse(v); } catch { return null; } };
+  const lsUser = tryParse(localStorage.getItem('userData')) || tryParse(localStorage.getItem('user')) || {};
+  const ssUser = tryParse(sessionStorage.getItem('userData')) || tryParse(sessionStorage.getItem('user')) || {};
+  const userIdFromObj = lsUser.idUsuario || ssUser.idUsuario || lsUser.userId || ssUser.userId || lsUser.id || ssUser.id;
+  if (userIdFromObj) return String(userIdFromObj);
+
+  // Try to decode JWT from storages
+  const token = localStorage.getItem('authToken') || localStorage.getItem('token') ||
+                sessionStorage.getItem('authToken') || sessionStorage.getItem('token') ||
+                lsUser.token || lsUser.accessToken || ssUser.token || ssUser.accessToken || null;
+  if (token && token.split('.').length === 3) {
+    try {
+      const payload = token.split('.')[1];
+      const json = JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/')));
+      // Common claim keys
+      return String(json.idUsuario || json.user_id || json.sub || json.uid || '');
+    } catch {}
+  }
+  return '';
 };
 
 export default api;

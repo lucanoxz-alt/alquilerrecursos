@@ -40,17 +40,36 @@ const ListaReservasRecientes = ({ actualizarLista, onEditarReserva, onVerDetalle
 
   const confirmarReserva = async (idReserva) => {
     try {
-      await reservaService.confirmar(idReserva);
+      const resp = await reservaService.confirmar(idReserva);
+      // Si el backend devolvió el pago del alquiler, descargar comprobante PDF del pago del 100%
+      if (resp && resp.pago && resp.pago.idPago) {
+        try {
+          const api = (await import('../../../../services/api')).default;
+          const { data } = await api.get(`/comprobantes-pago/pago/${resp.pago.idPago}/pdf`, { responseType: 'blob' });
+          const url = URL.createObjectURL(new Blob([data], { type: 'application/pdf' }));
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `comprobante_alquiler_${resp.alquiler.idAlquiler}.pdf`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          setTimeout(() => URL.revokeObjectURL(url), 60_000);
+        } catch (e) {
+          console.warn('Reserva confirmada, pero no se pudo descargar automáticamente el comprobante del alquiler:', e);
+        }
+      }
+
       await cargarReservas(); // Recargar lista
     } catch (error) {
       console.error('Error confirmando reserva:', error);
-      setError('Error confirmando reserva');
+      setError(error.response?.data?.error || 'Error confirmando reserva');
     }
   };
 
   const cancelarReserva = async (idReserva, motivo) => {
     try {
-      await reservaService.cancelar(idReserva, motivo, 'USR001'); // Usuario temporal
+      const { getCurrentUserId } = await import('../../../../services/api');
+      await reservaService.cancelar(idReserva, motivo, getCurrentUserId());
       await cargarReservas(); // Recargar lista
     } catch (error) {
       console.error('Error cancelando reserva:', error);
@@ -75,6 +94,8 @@ const ListaReservasRecientes = ({ actualizarLista, onEditarReserva, onVerDetalle
       default: return <Clock className="w-4 h-4" />;
     }
   };
+
+  const [openMenuId, setOpenMenuId] = useState(null);
 
   const reservasFiltradas = reservas.filter(reserva => {
     if (filtroEstado === 'todas') return true;
@@ -188,6 +209,105 @@ const ListaReservasRecientes = ({ actualizarLista, onEditarReserva, onVerDetalle
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                   <div className="flex items-center justify-end space-x-2">
+                    {/* Botón principal: Ticket (Comprobante de Pago Inicial) */}
+                    <button
+                      onClick={async () => {
+                        try {
+                          const api = (await import('../../../../services/api')).default;
+                          const { data } = await api.get(`/comprobantes-pago-reserva/reserva/${reserva.idReserva}/pdf`, { responseType: 'blob' });
+                          const url = URL.createObjectURL(new Blob([data], { type: 'application/pdf' }));
+                          window.open(url, '_blank');
+                          setTimeout(() => URL.revokeObjectURL(url), 60_000);
+                        } catch (err) {
+                          console.error('Error al abrir tiket de reserva', err);
+                          alert('No se pudo abrir el tiket de reserva. ¿Tu sesión sigue activa?');
+                        }
+                      }}
+                      className="inline-flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg bg-blue-600 hover:bg-blue-700 text-white"
+                      title="Ticket (Comprobante de Pago Inicial)"
+                    >
+                      Ticket
+                    </button>
+
+                    {/* Botón "Ver más" con menú */}
+                    <div className="relative inline-block text-left">
+                      <button
+                        onClick={() => setOpenMenuId(openMenuId === reserva.idReserva ? null : reserva.idReserva)}
+                        className="inline-flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg bg-white border border-gray-200 hover:bg-gray-50 text-gray-700"
+                        title="Ver más"
+                      >
+                        Ver más
+                      </button>
+                      {openMenuId === reserva.idReserva && (
+                        <div className="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-20">
+                          <div className="py-1">
+                            {reserva.estadoreserva === 'Pendiente' && (
+                              <button
+                                onClick={() => { setOpenMenuId(null); confirmarReserva(reserva.idReserva); }}
+                                className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                              >
+                                Confirmar Reserva
+                              </button>
+                            )}
+                            <button
+                              onClick={() => {
+                                setOpenMenuId(null);
+                                const motivo = prompt('Motivo de cancelación:');
+                                if (motivo) cancelarReserva(reserva.idReserva, motivo);
+                              }}
+                              className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                            >
+                              Cancelar Reserva
+                            </button>
+                            <hr />
+                            <button
+                              onClick={async () => {
+                                try {
+                                  setOpenMenuId(null);
+                                  const api = (await import('../../../../services/api')).default;
+                                  const { data } = await api.get(`/comprobantes-pago-reserva/reserva/${reserva.idReserva}/pdf`, { responseType: 'blob' });
+                                  const url = URL.createObjectURL(new Blob([data], { type: 'application/pdf' }));
+                                  const a = document.createElement('a'); a.href = url; a.download = `boleta_reserva_${reserva.idReserva}.pdf`; document.body.appendChild(a); a.click(); document.body.removeChild(a);
+                                  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+                                } catch (err) { console.error('Error al descargar Boleta PDF de reserva', err); alert('No se pudo descargar la Boleta PDF.'); }
+                              }}
+                              className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                            >
+                              Boleta PDF
+                            </button>
+                            <button
+                              onClick={async () => {
+                                try {
+                                  setOpenMenuId(null);
+                                  const api = (await import('../../../../services/api')).default;
+                                  const { data } = await api.get(`/comprobantes-pago-reserva/reserva/${reserva.idReserva}/pdf`, { responseType: 'blob' });
+                                  const url = URL.createObjectURL(new Blob([data], { type: 'application/pdf' }));
+                                  const a = document.createElement('a'); a.href = url; a.download = `factura_reserva_${reserva.idReserva}.pdf`; document.body.appendChild(a); a.click(); document.body.removeChild(a);
+                                  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+                                } catch (err) { console.error('Error al descargar Factura PDF de reserva', err); alert('No se pudo descargar la Factura PDF.'); }
+                              }}
+                              className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                            >
+                              Factura PDF
+                            </button>
+                            <button
+                              onClick={async () => {
+                                try {
+                                  setOpenMenuId(null);
+                                  const api = (await import('../../../../services/api')).default;
+                                  // XML de comprobante de reserva no disponible vía este endpoint
+                                  alert('XML no disponible para comprobantes de reserva vía este botón.');
+                                } catch (err) { console.error('Error al descargar XML de reserva', err); alert('No se pudo descargar el XML.'); }
+                              }}
+                              className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                            >
+                              XML
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
                     <button
                       onClick={() => onVerDetalle && onVerDetalle(reserva)}
                       className="text-blue-600 hover:text-blue-900"
@@ -195,40 +315,6 @@ const ListaReservasRecientes = ({ actualizarLista, onEditarReserva, onVerDetalle
                     >
                       <Eye className="w-4 h-4" />
                     </button>
-                    
-                    {reserva.estadoreserva === 'Pendiente' && (
-                      <>
-                        <button
-                          onClick={() => confirmarReserva(reserva.idReserva)}
-                          className="text-green-600 hover:text-green-900"
-                          title="Confirmar reserva"
-                        >
-                          <CheckCircle className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => {
-                            const motivo = prompt('Motivo de cancelación:');
-                            if (motivo) {
-                              cancelarReserva(reserva.idReserva, motivo);
-                            }
-                          }}
-                          className="text-red-600 hover:text-red-900"
-                          title="Cancelar reserva"
-                        >
-                          <XCircle className="w-4 h-4" />
-                        </button>
-                      </>
-                    )}
-                    
-                    {onEditarReserva && (
-                      <button
-                        onClick={() => onEditarReserva(reserva)}
-                        className="text-gray-600 hover:text-gray-900"
-                        title="Editar reserva"
-                      >
-                        <Edit className="w-4 h-4" />
-                      </button>
-                    )}
                   </div>
                 </td>
               </tr>

@@ -140,7 +140,7 @@ const TarjetaResumenAlquiler = ({
             </div>
             {fechaInicio && (
               <div className="text-xs text-orange-600">
-                Inicio: {new Date(fechaInicio).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', hour12: false })}
+                Inicio: {new Date(fechaInicio).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}
               </div>
             )}
           </div>

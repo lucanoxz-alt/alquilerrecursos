@@ -52,6 +52,7 @@ const ListaAlquileresRecientes = ({ actualizarLista = 0, onVerDetalle }) => {
   const [error, setError] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [filtroEstado, setFiltroEstado] = useState(''); // placeholder visual
+  const [openMenuId, setOpenMenuId] = useState(null);
 
   const cargar = async () => {
     setLoading(true);
@@ -196,10 +197,10 @@ const ListaAlquileresRecientes = ({ actualizarLista = 0, onVerDetalle }) => {
                   <td className="py-3 px-4 text-gray-700">{getClienteNombre(r) || '—'}</td>
                   <td className="py-3 px-4 text-gray-700 max-w-md truncate">
                     {Array.isArray(r.nombresRecursos) && r.nombresRecursos.length > 0
-                      ? r.nombresRecursos.join(' | ')
-                      : `${(r.detalles || []).length} recurso(s)`}
+                      ? r.nombresRecursos.length
+                      : (r.detalles || []).length}
                   </td>
-                  <td className="py-3 px-4 text-gray-700 whitespace-nowrap">{r.fechaHoraInicio ? new Date(r.fechaHoraInicio).toLocaleString('es-PE') : ''}</td>
+                  <td className="py-3 px-4 text-gray-700 whitespace-nowrap">{r.fechaHoraInicio ? new Date(r.fechaHoraInicio).toLocaleString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }) : ''}</td>
                   <td className="py-3 px-4 text-gray-900 font-medium">S/. {typeof r.costoTotal === 'number' ? r.costoTotal.toFixed(2) : r.costoTotal}</td>
                   <td className="py-3 px-4">
                     <span className={`px-2 py-1 rounded-full text-xs font-medium ${r.estadoalquiler === 'Finalizado' ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'}`}>{r.estadoalquiler || '—'}</span>
@@ -209,45 +210,62 @@ const ListaAlquileresRecientes = ({ actualizarLista = 0, onVerDetalle }) => {
                       <button
                         onClick={async () => {
                           try {
-                            const { data } = await api.get(`/boletas/${r.idAlquiler}/html`, { responseType: 'text' });
-                            const blob = new Blob([data], { type: 'text/html;charset=utf-8' });
-                            const url = URL.createObjectURL(blob);
+                            const { data } = await api.get(`/comprobantes-pago/alquiler/${r.idAlquiler}/pdf`, { responseType: 'blob' });
+                            const url = URL.createObjectURL(new Blob([data], { type: 'application/pdf' }));
                             window.open(url, '_blank');
                             setTimeout(() => URL.revokeObjectURL(url), 60_000);
                           } catch (err) {
                             console.error('Error al abrir boleta', err);
-                            alert('No se pudo abrir la boleta. ¿Tu sesión sigue activa? (HTTP 401)');
+                            alert('No se pudo abrir la boleta. ¿Tu sesión sigue activa?');
                           }
                         }}
-                        className="inline-flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg bg-blue-600 hover:bg-blue-700 text-white"
+                        className="flex flex-col items-center gap-1 px-3 py-2 text-sm rounded-lg bg-blue-600 hover:bg-blue-700 text-white"
                         title="Ver boleta"
                       >
                         <FileText className="w-4 h-4" />
-                        Ver boleta
+                        <span className="text-xs">Ver boleta</span>
                       </button>
-                      <button
-                        onClick={async () => {
-                          try {
-                            const { data } = await api.get(`/boletas/${r.idAlquiler}/pdf`, { responseType: 'blob' });
-                            const url = URL.createObjectURL(new Blob([data], { type: 'application/pdf' }));
-                            const a = document.createElement('a');
-                            a.href = url;
-                            a.download = `boleta_${r.idAlquiler}.pdf`;
-                            document.body.appendChild(a);
-                            a.click();
-                            document.body.removeChild(a);
-                            setTimeout(() => URL.revokeObjectURL(url), 60_000);
-                          } catch (err) {
-                            console.error('Error al descargar boleta PDF', err);
-                            alert('No se pudo descargar la boleta PDF. ¿Tu sesión sigue activa? (HTTP 401)');
-                          }
-                        }}
-                        className="inline-flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg bg-white border border-gray-200 hover:bg-gray-50 text-gray-700"
-                        title="Descargar boleta PDF"
-                      >
-                        <FileText className="w-4 h-4" />
-                        Descargar PDF
-                      </button>
+
+                      {/* Ver más */}
+                      <div className="relative inline-block text-left">
+                        <button
+                          onClick={() => setOpenMenuId(openMenuId === r.idAlquiler ? null : r.idAlquiler)}
+                          className="inline-flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg bg-white border border-gray-200 hover:bg-gray-50 text-gray-700"
+                          title="Ver más"
+                        >
+                          Ver más
+                        </button>
+                        {openMenuId === r.idAlquiler && (
+                          <div className="origin-top-right absolute right-0 mt-2 w-44 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-20">
+                            <div className="py-1">
+                              <button
+                                onClick={async () => {
+                                  try { setOpenMenuId(null); const { data } = await api.get(`/comprobantes-pago/alquiler/${r.idAlquiler}/pdf`, { responseType: 'blob' }); const url = URL.createObjectURL(new Blob([data], { type: 'application/pdf' })); const a = document.createElement('a'); a.href = url; a.download = `boleta_${r.idAlquiler}.pdf`; document.body.appendChild(a); a.click(); document.body.removeChild(a); setTimeout(() => URL.revokeObjectURL(url), 60_000); } catch (err) { console.error('Error descargando Boleta', err); }
+                                }}
+                                className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                              >
+                                Boleta PDF
+                              </button>
+                              <button
+                                onClick={async () => {
+                                  try { setOpenMenuId(null); const { data } = await api.get(`/comprobantes-pago/alquiler/${r.idAlquiler}/pdf`, { responseType: 'blob' }); const url = URL.createObjectURL(new Blob([data], { type: 'application/pdf' })); const a = document.createElement('a'); a.href = url; a.download = `factura_${r.idAlquiler}.pdf`; document.body.appendChild(a); a.click(); document.body.removeChild(a); setTimeout(() => URL.revokeObjectURL(url), 60_000); } catch (err) { console.error('Error descargando Factura', err); }
+                                }}
+                                className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                              >
+                                Factura PDF
+                              </button>
+                              <button
+                                onClick={async () => {
+                                  setOpenMenuId(null); alert('XML no disponible desde este botón.');
+                                }}
+                                className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                              >
+                                XML
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </td>
                 </tr>

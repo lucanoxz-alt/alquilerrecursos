@@ -24,7 +24,7 @@ public class Alquiler {
     @Column(name = "duracion_horas", nullable = false)
     private Integer duracionHoras;
 
-    @Column(name = "fecha_hora_fin", nullable = false, insertable = false, updatable = false)
+    @Column(name = "fecha_hora_fin", nullable = true, insertable = false, updatable = false)
     private LocalDateTime fechaHoraFin;
 
     @Column(name = "costo_total", precision = 10, scale = 2, nullable = false)

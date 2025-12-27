@@ -68,4 +68,20 @@ public class BoletaController {
             return ResponseEntity.badRequest().body("<html><body><h1>Error: " + e.getMessage() + "</h1></body></html>");
         }
     }
+
+    /**
+     * Generar boleta en PDF
+     */
+    @GetMapping("/{idAlquiler}/pdf")
+    public ResponseEntity<byte[]> generarBoletaPDF(@PathVariable String idAlquiler) {
+        try {
+            byte[] pdf = boletaService.generarBoletaPDF(idAlquiler);
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_PDF);
+            headers.set("Content-Disposition", "attachment; filename=\"boleta_" + idAlquiler + ".pdf\"");
+            return ResponseEntity.ok().headers(headers).body(pdf);
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(("Error generando PDF: " + e.getMessage()).getBytes());
+        }
+    }
 }

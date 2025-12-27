@@ -1,7 +1,6 @@
 USE AlquilerDeVehiculosParaPlaya;
 GO
 
-
 -- ========================================================================
 -- CREAR TABLAS
 -- ========================================================================
@@ -39,7 +38,9 @@ CREATE TABLE USUARIO (
     password NVARCHAR(255) NOT NULL,
     rol NVARCHAR(50) NOT NULL CHECK (rol IN ('Administrador', 'Jefe', 'Empleado')),
     email NVARCHAR(255) UNIQUE,
-    telefono NVARCHAR(20)
+    telefono NVARCHAR(20),
+    estado_usuario NVARCHAR(20)
+
 );
 
 CREATE TABLE RECURSO (
@@ -48,7 +49,7 @@ CREATE TABLE RECURSO (
     descripcion NVARCHAR(255),
     tarifa_hora DECIMAL(10, 2) NOT NULL CHECK (tarifa_hora >= 0),
     estado NVARCHAR(20) NOT NULL DEFAULT 'Disponible' 
-        CHECK (estado IN ('Disponible', 'Alquilado', 'Mantenimiento', 'Reservado', 'Fuera de Servicio')),
+        CHECK (estado IN ('Disponible', 'Alquilado', 'Mantenimiento', 'Reservado')),
     ubicacion NVARCHAR(255),
     id_tipo CHAR(5) NOT NULL,
     FOREIGN KEY (id_tipo) REFERENCES TIPO_RECURSO(id_tipo)
@@ -57,6 +58,7 @@ CREATE TABLE RECURSO (
 CREATE TABLE RESERVA (
     id_reserva CHAR(6) PRIMARY KEY,
     id_turista CHAR(6) NOT NULL,
+    id_usuario_gestor CHAR(6) NOT NULL, -- Nuevo campo añadido
     fecha_hora_inicio_prevista DATETIME NOT NULL,
     estadoreserva NVARCHAR(20) NOT NULL DEFAULT 'Pendiente' 
         CHECK (estadoreserva IN ('Pendiente', 'Confirmada', 'Cancelada')),
@@ -66,6 +68,7 @@ CREATE TABLE RESERVA (
     motivo_cancelacion NVARCHAR(255) NULL,
     id_promocion CHAR(7) NULL,
     FOREIGN KEY (id_turista) REFERENCES TURISTA(id_turista),
+    FOREIGN KEY (id_usuario_gestor) REFERENCES USUARIO(id_usuario), -- Nueva FK añadida
     FOREIGN KEY (id_usuario_cancelacion) REFERENCES USUARIO(id_usuario),
     FOREIGN KEY (id_promocion) REFERENCES PROMOCION(id_promocion)
 );
@@ -86,6 +89,7 @@ CREATE TABLE PAGO_RESERVA (
     fecha_pago DATETIME NOT NULL DEFAULT GETDATE(),
     metodo_pago NVARCHAR(50),
     num_comprobante NVARCHAR(100),
+    descuento_aplicado DECIMAL(10,2),
     FOREIGN KEY (id_reserva) REFERENCES RESERVA(id_reserva)
 );
 
@@ -169,15 +173,17 @@ GO
 CREATE PROCEDURE REGISTRARUSUARIO
     @ID CHAR(6), @NOM NVARCHAR(100), @APE NVARCHAR(100),
     @USER NVARCHAR(50), @PASS NVARCHAR(255), @ROL NVARCHAR(50),
-    @EMAIL NVARCHAR(255), @TEL NVARCHAR(20)
+    @EMAIL NVARCHAR(255), @TEL NVARCHAR(20), @ESTADO_USR NVARCHAR(20) -- Parámetro añadido
 AS BEGIN
-    INSERT INTO USUARIO VALUES (@ID, @NOM, @APE, @USER, @PASS, @ROL, @EMAIL, @TEL);
+    INSERT INTO USUARIO (id_usuario, nombre, apellidos, username, password, rol, email, telefono, estado_usuario) -- Campo añadido
+    VALUES (@ID, @NOM, @APE, @USER, @PASS, @ROL, @EMAIL, @TEL, @ESTADO_USR); -- Valor añadido
 END;
 GO
 
 CREATE PROCEDURE REGISTRARRESERVA
     @ID CHAR(6),
     @ID_TURISTA CHAR(6),
+    @ID_USR_GESTOR CHAR(6), -- Nuevo parámetro añadido
     @FECHA_INICIO DATETIME,
     @ESTADORESERVA NVARCHAR(20),
     @COSTO_EST DECIMAL(10,2),
@@ -187,11 +193,13 @@ CREATE PROCEDURE REGISTRARRESERVA
     @ID_PROMOCION CHAR(7) = NULL
 AS BEGIN
     INSERT INTO RESERVA (
-        id_reserva, id_turista, fecha_hora_inicio_prevista, estadoreserva,
+        id_reserva, id_turista, id_usuario_gestor, -- Nuevo campo añadido
+        fecha_hora_inicio_prevista, estadoreserva,
         costo_total_estimado, fecha_cancelacion, id_usuario_cancelacion,
         motivo_cancelacion, id_promocion
     ) VALUES (
-        @ID, @ID_TURISTA, @FECHA_INICIO, @ESTADORESERVA, @COSTO_EST,
+        @ID, @ID_TURISTA, @ID_USR_GESTOR, -- Nuevo valor añadido
+        @FECHA_INICIO, @ESTADORESERVA, @COSTO_EST,
         @FECHA_CANCELACION, @ID_USR_CANCELACION, @MOTIVO_CANCELACION, @ID_PROMOCION
     );
 END;
@@ -261,3 +269,18 @@ BEGIN
     INSERT INTO PAGO (id_pago, id_alquiler, subtotal, descuento_aplicado, total_final, monto_pagado, num_boleta, metodo_pago)
     VALUES (@ID, @ID_ALQUILER, @SUBTOTAL, @DESCUENTO_APLICADO, @TOTAL_FINAL, @MONTO_PAGADO, @NUM_BOLETA, @METODO_PAGO);
 END;
+GO
+------------modificaciones
+CREATE OR ALTER PROCEDURE REGISTRARPAGORESERVA
+@ID CHAR(6),
+@ID_RESERVA CHAR(6),
+@MONTO_PAGO DECIMAL(10,2),
+@METODO_PAGO NVARCHAR(50),
+@NUM_COMPROBANTE NVARCHAR(100),
+@DESCUENTO_APLICADO DECIMAL(10,2) = 0 -- Nuevo parámetro
+AS
+BEGIN
+    INSERT INTO PAGO_RESERVA (id_pago_reserva, id_reserva, monto_pago, metodo_pago, num_comprobante, descuento_aplicado)
+    VALUES (@ID, @ID_RESERVA, @MONTO_PAGO, @METODO_PAGO, @NUM_COMPROBANTE, @DESCUENTO_APLICADO);
+END;
+GO

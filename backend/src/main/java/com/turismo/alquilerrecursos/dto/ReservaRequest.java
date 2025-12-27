@@ -7,6 +7,8 @@ public class ReservaRequest {
     private String idTurista;
     private LocalDateTime fechaHoraInicioPrevista;
     private String idPromocion; // opcional
+    private String metodoPago; // opcional, para registrar el pago del 50%
+    private String idUsuarioGestor; // opcional, si viene desde el frontend
     private List<RecursoSolicitado> recursos;
 
     public static class RecursoSolicitado {
@@ -27,6 +29,10 @@ public class ReservaRequest {
     public void setFechaHoraInicioPrevista(LocalDateTime fechaHoraInicioPrevista) { this.fechaHoraInicioPrevista = fechaHoraInicioPrevista; }
     public String getIdPromocion() { return idPromocion; }
     public void setIdPromocion(String idPromocion) { this.idPromocion = idPromocion; }
+    public String getMetodoPago() { return metodoPago; }
+    public void setMetodoPago(String metodoPago) { this.metodoPago = metodoPago; }
+    public String getIdUsuarioGestor() { return idUsuarioGestor; }
+    public void setIdUsuarioGestor(String idUsuarioGestor) { this.idUsuarioGestor = idUsuarioGestor; }
     public List<RecursoSolicitado> getRecursos() { return recursos; }
     public void setRecursos(List<RecursoSolicitado> recursos) { this.recursos = recursos; }
 }

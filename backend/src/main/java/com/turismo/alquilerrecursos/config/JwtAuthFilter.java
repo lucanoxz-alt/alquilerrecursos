@@ -66,8 +66,13 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                         return; // Salir inmediatamente
                     }
                 }
+            } catch (io.jsonwebtoken.ExpiredJwtException eje) {
+                // Token expirado: registrar a nivel debug y responder 401 sin stacktrace
+                logger.debug("Token JWT expirado", eje);
+                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                return;
             } catch (Exception e) {
-                logger.error("Error al procesar el token JWT", e);
+                logger.warn("Error al procesar el token JWT: " + e.getMessage());
                 response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
                 return; // Salir inmediatamente
             }

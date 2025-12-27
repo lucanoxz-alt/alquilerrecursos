@@ -9,6 +9,10 @@ const SeleccionRecursosConValidacion = ({
   duracionHoras 
 }) => {
   const [recursosDisponibles, setRecursosDisponibles] = useState([]);
+  const [search, setSearch] = useState('');
+  const [tipoFiltro, setTipoFiltro] = useState('');
+  const [estadoFiltro, setEstadoFiltro] = useState('');
+  const [frecuentes, setFrecuentes] = useState({});
   const [recursosSeleccionados, setRecursosSeleccionados] = useState([]);
   const [cargando, setCargando] = useState(false);
   const [validacionGlobal, setValidacionGlobal] = useState({
@@ -18,7 +22,7 @@ const SeleccionRecursosConValidacion = ({
 
   // Cargar recursos disponibles cuando cambian los parámetros
   useEffect(() => {
-    if (fechaInicio && duracionHoras) {
+    if (fechaInicio) {
       cargarRecursosDisponibles();
     }
   }, [fechaInicio, duracionHoras]);
@@ -34,8 +38,8 @@ const SeleccionRecursosConValidacion = ({
     setCargando(true);
     try {
       const data = await disponibilidadService.obtenerRecursosDisponibles(
-        fechaInicio, 
-        duracionHoras
+        fechaInicio,
+        duracionHoras || 1
       );
       setRecursosDisponibles(data.recursosDisponibles);
     } catch (error) {
@@ -85,6 +89,19 @@ const SeleccionRecursosConValidacion = ({
   };
 
   const toggleRecurso = (recurso) => {
+    // actualizar frecuencia en localStorage
+    try {
+      const key = 'frecuentes_recursos';
+      const current = JSON.parse(localStorage.getItem(key) || '{}');
+      if (recursosSeleccionados.some(r => r.idRecurso === recurso.idRecurso)) {
+        // si deselecciona, no incrementamos
+      } else {
+        current[recurso.idRecurso] = (current[recurso.idRecurso] || 0) + 1;
+        localStorage.setItem(key, JSON.stringify(current));
+        setFrecuentes(current);
+      }
+    } catch {}
+
     setRecursosSeleccionados(prev => {
       const yaSeleccionado = prev.find(r => r.idRecurso === recurso.idRecurso);
       
@@ -92,8 +109,8 @@ const SeleccionRecursosConValidacion = ({
         // Remover del array
         return prev.filter(r => r.idRecurso !== recurso.idRecurso);
       } else {
-        // Agregar al array
-        return [...prev, recurso];
+        // Agregar al array con horasSolicitadas por defecto
+        return [...prev, { ...recurso, horasSolicitadas: 1 }];
       }
     });
   };
@@ -104,9 +121,31 @@ const SeleccionRecursosConValidacion = ({
 
   const calcularCostoTotal = () => {
     return recursosSeleccionados.reduce((total, recurso) => {
-      return total + (parseFloat(recurso.tarifaHora) * duracionHoras);
+      const horas = parseInt(recurso.horasSolicitadas, 10) || (parseInt(duracionHoras, 10) || 1);
+      return total + (parseFloat(recurso.tarifaHora) * horas);
     }, 0);
   };
+
+  const tiposDisponibles = Array.from(new Set(recursosDisponibles.map(r => r.idTipo).filter(Boolean)));
+  const estadosDisponibles = ['Disponible'];
+
+  const recursosFiltrados = recursosDisponibles.filter(r => {
+    const matchSearch = [r.nombre, r.descripcion, r.ubicacion].filter(Boolean).some(t => t.toLowerCase().includes(search.toLowerCase()));
+    const matchTipo = tipoFiltro ? r.idTipo === tipoFiltro : true;
+    const matchEstado = estadoFiltro ? (r.estado === estadoFiltro) : true;
+    return matchSearch && matchTipo && matchEstado;
+  });
+
+  const recursosFrecuentes = React.useMemo(() => {
+    try {
+      const key = 'frecuentes_recursos';
+      const current = JSON.parse(localStorage.getItem(key) || '{}');
+      const entries = Object.entries(current).sort((a,b) => b[1]-a[1]).slice(0,5);
+      const ids = entries.map(e => e[0]);
+      const map = new Map(recursosDisponibles.map(r => [String(r.idRecurso), r]));
+      return ids.map(id => map.get(String(id))).filter(Boolean);
+    } catch { return []; }
+  }, [recursosDisponibles, frecuentes]);
 
   if (cargando) {
     return (
@@ -149,13 +188,42 @@ const SeleccionRecursosConValidacion = ({
       {/* Recursos disponibles */}
       <Card className="p-6">
         <h3 className="text-lg font-semibold mb-4">
-          Recursos Disponibles 
-          {fechaInicio && duracionHoras && (
-            <span className="text-sm font-normal text-gray-600">
-              {` - ${new Date(fechaInicio).toLocaleDateString()} por ${duracionHoras}h`}
-            </span>
-          )}
+          Seleccionar recursos <span className="text-red-500">*</span>
         </h3>
+        <div className="bg-gray-50 p-4 rounded-lg space-y-3 mb-4">
+          <div className="flex flex-col md:flex-row gap-3">
+            <input
+              type="text"
+              placeholder="Buscar por nombre, descripción o ubicación..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <select
+              value={tipoFiltro}
+              onChange={(e) => setTipoFiltro(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">Todos los tipos</option>
+              {tiposDisponibles.map(t => (
+                <option key={t} value={t}>{t}</option>
+              ))}
+            </select>
+            <select
+              value={estadoFiltro}
+              onChange={(e) => setEstadoFiltro(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">Todos los estados</option>
+              {estadosDisponibles.map(e => (
+                <option key={e} value={e}>{e}</option>
+              ))}
+            </select>
+          </div>
+          {fechaInicio && (
+            <div className="text-xs text-gray-600">Mostrando disponibilidad para {new Date(fechaInicio).toLocaleString()} por {duracionHoras} hora(s)</div>
+          )}
+        </div>
 
         {recursosDisponibles.length === 0 ? (
           <div className="text-center py-8 text-gray-500">
@@ -164,7 +232,7 @@ const SeleccionRecursosConValidacion = ({
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {recursosDisponibles.map((recurso) => {
+            {recursosFiltrados.map((recurso) => {
               const seleccionado = estaSeleccionado(recurso);
               return (
                 <div
@@ -184,30 +252,41 @@ const SeleccionRecursosConValidacion = ({
                       <p className="text-sm text-gray-600 mt-1">
                         {recurso.descripcion}
                       </p>
-                      <div className="mt-2 space-y-1">
+                      <div className="mt-2 space-y-2">
                         <p className="text-sm">
                           <span className="font-medium">Tarifa:</span> 
-                          ${recurso.tarifaHora}/hora
+                          S/. {parseFloat(recurso.tarifaHora).toFixed(2)}/hora
                         </p>
                         <p className="text-sm">
                           <span className="font-medium">Ubicación:</span> 
                           {recurso.ubicacion}
                         </p>
-                        {duracionHoras && (
-                          <p className="text-sm font-medium text-blue-600">
-                            Total: ${(parseFloat(recurso.tarifaHora) * duracionHoras).toFixed(2)}
-                          </p>
+                        {seleccionado && (
+                          <div className="flex items-center gap-2">
+                            <label className="text-sm">Horas:</label>
+                            <input
+                              type="number"
+                              min={1}
+                              value={parseInt(recursosSeleccionados.find(r => r.idRecurso === recurso.idRecurso)?.horasSolicitadas, 10) || 1}
+                              onClick={(e) => e.stopPropagation()}
+                              onChange={(e) => {
+                                const val = Math.max(1, parseInt(e.target.value || '1', 10));
+                                setRecursosSeleccionados(prev => prev.map(r => r.idRecurso === recurso.idRecurso ? { ...r, horasSolicitadas: val } : r));
+                              }}
+                              className="w-20 px-2 py-1 border border-gray-300 rounded"
+                            />
+                           <span className="text-xs text-gray-500">Total: S/. {(parseFloat(recurso.tarifaHora) * (parseInt(recursosSeleccionados.find(r => r.idRecurso === recurso.idRecurso)?.horasSolicitadas, 10) || (parseInt(duracionHoras, 10) || 1))).toFixed(2)}</span>
+                          </div>
                         )}
                       </div>
                     </div>
-                    <div className={`ml-3 w-6 h-6 rounded-full border-2 flex items-center justify-center ${
-                      seleccionado
-                        ? 'bg-blue-500 border-blue-500'
-                        : 'border-gray-300'
-                    }`}>
-                      {seleccionado && (
-                        <div className="w-3 h-3 bg-white rounded-full"></div>
-                      )}
+                    <div className="ml-3">
+                      <input
+                        type="checkbox"
+                        readOnly
+                        checked={seleccionado}
+                        className="w-5 h-5 text-blue-600 border-gray-300 rounded"
+                      />
                     </div>
                   </div>
                 </div>
