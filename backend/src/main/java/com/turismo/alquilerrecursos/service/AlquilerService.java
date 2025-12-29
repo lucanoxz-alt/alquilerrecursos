@@ -12,6 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.UUID;
 
 
@@ -32,6 +33,8 @@ public class AlquilerService {
     private PromocionRepository promocionRepository;
     @Autowired
     private DisponibilidadService disponibilidadService;
+    @Autowired
+    private com.turismo.alquilerrecursos.repository.UsuarioRepository usuarioRepository;
 
     @Transactional
     public Alquiler crearAlquiler(AlquilerRequest request) {
@@ -100,7 +103,19 @@ public class AlquilerService {
             alquiler.setIdPromocion(promocion != null ? promocion.getIdPromocion() : null);
             alquilerRepository.save(alquiler);
 
-            // 6. Cambiar estado de recursos a "Alquilado"
+           // Asignar gestor autenticado y persistir
+           try {
+               org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+               String gestor = null;
+               if (auth != null && auth.getName() != null) {
+                   com.turismo.alquilerrecursos.model.Usuario u = usuarioRepository.findByUsername(auth.getName());
+                   if (u != null) gestor = u.getIdUsuario();
+               }
+               alquiler.setIdUsuarioGestor(gestor != null ? gestor : "USR001");
+               alquilerRepository.save(alquiler);
+           } catch (Exception ignored) {}
+
+           // 6. Cambiar estado de recursos a "Alquilado"
             for (AlquilerRequest.RecursoSolicitado r : request.getRecursos()) {
                 String idRecurso = r.getIdRecurso();
                 if (idRecurso == null) {
@@ -153,6 +168,10 @@ public class AlquilerService {
             return alquiler;
         } else {
             // Caso: alquiler directo (sin reserva)
+            // Establecer fecha/hora de inicio por defecto (hora de Lima) si no viene
+            if (request.getFechaHoraInicio() == null) {
+                request.setFechaHoraInicio(LocalDateTime.now(ZoneId.of("America/Lima")));
+            }
             // VALIDAR DISPONIBILIDAD PRIMERO
             for (AlquilerRequest.RecursoSolicitado r : request.getRecursos()) {
                 String idRecurso = r.getIdRecurso();
@@ -219,7 +238,19 @@ public class AlquilerService {
             alquiler.setFechaHoraFin(request.getFechaHoraInicio().plusHours(alquiler.getDuracionHoras()));
             alquilerRepository.save(alquiler);
 
-            // Cambiar estado de recursos a "Alquilado"
+           // Asignar gestor autenticado y persistir
+           try {
+               org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+               String gestor = null;
+               if (auth != null && auth.getName() != null) {
+                   com.turismo.alquilerrecursos.model.Usuario u = usuarioRepository.findByUsername(auth.getName());
+                   if (u != null) gestor = u.getIdUsuario();
+               }
+               alquiler.setIdUsuarioGestor(gestor != null ? gestor : "USR001");
+               alquilerRepository.save(alquiler);
+           } catch (Exception ignored) {}
+
+           // Cambiar estado de recursos a "Alquilado"
             for (AlquilerRequest.RecursoSolicitado r : request.getRecursos()) {
                 String idRecurso = r.getIdRecurso();
                 if (idRecurso == null) {

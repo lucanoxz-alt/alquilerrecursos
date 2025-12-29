@@ -8,6 +8,7 @@ public class AlquilerListadoDTO {
     private String idTurista;
     private String nombreCliente;
     private LocalDateTime fechaHoraInicio;
+    private String fechaHoraInicioFmt;
     private Integer duracionHoras;
     private BigDecimal costoTotal;
     private String estadoalquiler;
@@ -31,6 +32,9 @@ public class AlquilerListadoDTO {
         this.nombresRecursos = nombresRecursos;
         this.cantidadRecursos = cantidadRecursos;
     }
+
+    public String getFechaHoraInicioFmt() { return fechaHoraInicioFmt; }
+    public void setFechaHoraInicioFmt(String fechaHoraInicioFmt) { this.fechaHoraInicioFmt = fechaHoraInicioFmt; }
 
     public String getIdAlquiler() { return idAlquiler; }
     public void setIdAlquiler(String idAlquiler) { this.idAlquiler = idAlquiler; }

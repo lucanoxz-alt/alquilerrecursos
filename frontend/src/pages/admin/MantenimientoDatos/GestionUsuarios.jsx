@@ -11,6 +11,7 @@ const GestionUsuarios = () => {
   const [formData, setFormData] = useState({
     nombre: '',
     apellidos: '',
+    username: '',
     email: '',
     telefono: '',
     password: '',
@@ -80,6 +81,7 @@ const GestionUsuarios = () => {
     setFormData({
       nombre: usuario.nombre || '',
       apellidos: usuario.apellidos || '',
+      username: usuario.username || '',
       email: usuario.email || '',
       telefono: usuario.telefono || '',
       password: '', // No mostrar password actual por seguridad
@@ -115,6 +117,7 @@ const GestionUsuarios = () => {
     setFormData({
       nombre: '',
       apellidos: '',
+      username: '',
       email: '',
       telefono: '',
       password: '',
@@ -308,6 +311,16 @@ const GestionUsuarios = () => {
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Usuario (username) *</label>
+                  <input
+                    type="text"
+                    required
+                    value={formData.username}
+                    onChange={(e) => setFormData({...formData, username: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                  />
+                </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Nombre *</label>
                   <input

@@ -1,50 +1,48 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Card, Button } from '@/components/ui';
-import DisponibilidadChecker from '@/components/DisponibilidadChecker';
 import { disponibilidadService } from '@/services/api';
 
-const SeleccionRecursosConValidacion = ({ 
-  onRecursosSeleccionados, 
-  fechaInicio, 
-  duracionHoras 
-}) => {
-  const [recursosDisponibles, setRecursosDisponibles] = useState([]);
+const SeleccionRecursosConValidacion = ({ onRecursosSeleccionados, fechaInicio, duracionHoras }) => {
+  const [recursos, setRecursos] = useState([]); // [{ recurso, estadoDisponibilidad, horaDisponible }]
   const [search, setSearch] = useState('');
   const [tipoFiltro, setTipoFiltro] = useState('');
   const [estadoFiltro, setEstadoFiltro] = useState('');
+  const [tipos, setTipos] = useState([]);
+  const [tipoNombreMap, setTipoNombreMap] = useState({});
   const [frecuentes, setFrecuentes] = useState({});
   const [recursosSeleccionados, setRecursosSeleccionados] = useState([]);
   const [cargando, setCargando] = useState(false);
-  const [validacionGlobal, setValidacionGlobal] = useState({
-    valida: false,
-    mensaje: ''
-  });
+  const [validacionGlobal, setValidacionGlobal] = useState({ valida: false, mensaje: '' });
 
-  // Cargar recursos disponibles cuando cambian los parámetros
   useEffect(() => {
-    if (fechaInicio) {
-      cargarRecursosDisponibles();
-    }
+    if (fechaInicio) cargarRecursosConDisponibilidad();
   }, [fechaInicio, duracionHoras]);
 
-  // Validar selección cuando cambian los recursos seleccionados
   useEffect(() => {
     if (recursosSeleccionados.length > 0 && fechaInicio && duracionHoras) {
       validarSeleccionCompleta();
     }
   }, [recursosSeleccionados, fechaInicio, duracionHoras]);
 
-  const cargarRecursosDisponibles = async () => {
+  const cargarRecursosConDisponibilidad = async () => {
     setCargando(true);
     try {
-      const data = await disponibilidadService.obtenerRecursosDisponibles(
-        fechaInicio,
-        duracionHoras || 1
-      );
-      setRecursosDisponibles(data.recursosDisponibles);
+      // cargar tipos para mostrar nombres legibles en filtros y chips
+      try {
+        const resp = await fetch('/api/tipos-recursos');
+        const tiposData = await resp.json();
+        const lista = Array.isArray(tiposData) ? tiposData : [];
+        setTipos(lista);
+        const map = {};
+        lista.forEach(t => { if (t.idTipo) map[t.idTipo] = t.nombre; });
+        setTipoNombreMap(map);
+      } catch {}
+
+      const data = await disponibilidadService.obtenerRecursosDetalle(fechaInicio, duracionHoras || 1);
+      setRecursos(data.detalle || []);
     } catch (error) {
       console.error('Error cargando recursos:', error);
-      setRecursosDisponibles([]);
+      setRecursos([]);
     } finally {
       setCargando(false);
     }
@@ -55,47 +53,29 @@ const SeleccionRecursosConValidacion = ({
       setValidacionGlobal({ valida: false, mensaje: 'No hay recursos seleccionados' });
       return;
     }
-
     try {
       const idsSeleccionados = recursosSeleccionados.map(r => r.idRecurso);
-      const resultado = await disponibilidadService.verificarMultiple(
-        idsSeleccionados,
-        fechaInicio,
-        duracionHoras
-      );
-
+      const resultado = await disponibilidadService.verificarMultiple(idsSeleccionados, fechaInicio, duracionHoras);
       setValidacionGlobal({
         valida: resultado.todosDisponibles,
-        mensaje: resultado.todosDisponibles 
-          ? 'Todos los recursos están disponibles' 
-          : 'Algunos recursos no están disponibles'
+        mensaje: resultado.todosDisponibles ? 'Todos los recursos están disponibles' : 'Algunos recursos no están disponibles'
       });
-
-      // Notificar al componente padre
-      if (onRecursosSeleccionados) {
-        onRecursosSeleccionados({
-          recursos: recursosSeleccionados,
-          valida: resultado.todosDisponibles,
-          detalles: resultado
-        });
-      }
+      onRecursosSeleccionados && onRecursosSeleccionados({
+        recursos: recursosSeleccionados,
+        valida: resultado.todosDisponibles,
+        detalles: resultado
+      });
     } catch (error) {
       console.error('Error validando selección:', error);
-      setValidacionGlobal({ 
-        valida: false, 
-        mensaje: 'Error validando disponibilidad' 
-      });
+      setValidacionGlobal({ valida: false, mensaje: 'Error validando disponibilidad' });
     }
   };
 
   const toggleRecurso = (recurso) => {
-    // actualizar frecuencia en localStorage
     try {
       const key = 'frecuentes_recursos';
       const current = JSON.parse(localStorage.getItem(key) || '{}');
-      if (recursosSeleccionados.some(r => r.idRecurso === recurso.idRecurso)) {
-        // si deselecciona, no incrementamos
-      } else {
+      if (!recursosSeleccionados.some(r => r.idRecurso === recurso.idRecurso)) {
         current[recurso.idRecurso] = (current[recurso.idRecurso] || 0) + 1;
         localStorage.setItem(key, JSON.stringify(current));
         setFrecuentes(current);
@@ -103,49 +83,40 @@ const SeleccionRecursosConValidacion = ({
     } catch {}
 
     setRecursosSeleccionados(prev => {
-      const yaSeleccionado = prev.find(r => r.idRecurso === recurso.idRecurso);
-      
-      if (yaSeleccionado) {
-        // Remover del array
-        return prev.filter(r => r.idRecurso !== recurso.idRecurso);
-      } else {
-        // Agregar al array con horasSolicitadas por defecto
-        return [...prev, { ...recurso, horasSolicitadas: 1 }];
-      }
+      const ya = prev.find(r => r.idRecurso === recurso.idRecurso);
+      if (ya) return prev.filter(r => r.idRecurso !== recurso.idRecurso);
+      return [...prev, { ...recurso, horasSolicitadas: 1 }];
     });
   };
 
-  const estaSeleccionado = (recurso) => {
-    return recursosSeleccionados.some(r => r.idRecurso === recurso.idRecurso);
-  };
-
-  const calcularCostoTotal = () => {
-    return recursosSeleccionados.reduce((total, recurso) => {
-      const horas = parseInt(recurso.horasSolicitadas, 10) || (parseInt(duracionHoras, 10) || 1);
-      return total + (parseFloat(recurso.tarifaHora) * horas);
+  const calcularCostoTotal = () =>
+    recursosSeleccionados.reduce((t, r) => {
+      const horas = parseInt(r.horasSolicitadas, 10) || (parseInt(duracionHoras, 10) || 1);
+      return t + parseFloat(r.tarifaHora) * horas;
     }, 0);
-  };
 
-  const tiposDisponibles = Array.from(new Set(recursosDisponibles.map(r => r.idTipo).filter(Boolean)));
-  const estadosDisponibles = ['Disponible'];
+  const tiposDisponibles = Array.from(new Set(recursos.map(x => x.recurso?.idTipo).filter(Boolean)));
+  const estadosDisponibles = Array.from(new Set([
+    ...recursos.map(x => (x.estadoDisponibilidad || '')).filter(Boolean),
+    ...recursos.map(x => (x.recurso?.estado || '')).filter(Boolean)
+  ].map(s => String(s)))).filter(Boolean);
 
-  const recursosFiltrados = recursosDisponibles.filter(r => {
+  const recursosFiltrados = recursos.filter(x => { const r = x.recurso || {};
     const matchSearch = [r.nombre, r.descripcion, r.ubicacion].filter(Boolean).some(t => t.toLowerCase().includes(search.toLowerCase()));
     const matchTipo = tipoFiltro ? r.idTipo === tipoFiltro : true;
-    const matchEstado = estadoFiltro ? (r.estado === estadoFiltro) : true;
+    const matchEstado = estadoFiltro ? ((r.estado === estadoFiltro) || (x.estadoDisponibilidad === estadoFiltro)) : true;
     return matchSearch && matchTipo && matchEstado;
   });
 
-  const recursosFrecuentes = React.useMemo(() => {
+  const recursosFrecuentes = useMemo(() => {
     try {
       const key = 'frecuentes_recursos';
       const current = JSON.parse(localStorage.getItem(key) || '{}');
-      const entries = Object.entries(current).sort((a,b) => b[1]-a[1]).slice(0,5);
-      const ids = entries.map(e => e[0]);
-      const map = new Map(recursosDisponibles.map(r => [String(r.idRecurso), r]));
-      return ids.map(id => map.get(String(id))).filter(Boolean);
+      const top = Object.entries(current).sort((a,b) => b[1]-a[1]).slice(0, 5).map(x => x[0]);
+      const map = new Map(recursos.map(x => [String(x.recurso?.idRecurso), x.recurso]).filter(([k,v]) => v));
+      return top.map(id => map.get(String(id))).filter(Boolean);
     } catch { return []; }
-  }, [recursosDisponibles, frecuentes]);
+  }, [recursos, frecuentes]);
 
   if (cargando) {
     return (
@@ -160,32 +131,18 @@ const SeleccionRecursosConValidacion = ({
 
   return (
     <div className="space-y-4">
-      {/* Estado de validación global */}
       {recursosSeleccionados.length > 0 && (
-        <Card className={`p-4 border-2 ${
-          validacionGlobal.valida 
-            ? 'border-green-200 bg-green-50' 
-            : 'border-red-200 bg-red-50'
-        }`}>
+        <Card className={`p-4 border-2 ${validacionGlobal.valida ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'}`}>
           <div className="flex items-center space-x-3">
-            <div className="text-2xl">
-              {validacionGlobal.valida ? '✅' : '❌'}
-            </div>
+            <div className="text-2xl">{validacionGlobal.valida ? '✅' : '❌'}</div>
             <div>
-              <h3 className="font-semibold">
-                Validación de Selección
-              </h3>
-              <p className={`text-sm ${
-                validacionGlobal.valida ? 'text-green-600' : 'text-red-600'
-              }`}>
-                {validacionGlobal.mensaje}
-              </p>
+              <h3 className="font-semibold">Validación de Selección</h3>
+              <p className={`text-sm ${validacionGlobal.valida ? 'text-green-600' : 'text-red-600'}`}>{validacionGlobal.mensaje}</p>
             </div>
           </div>
         </Card>
       )}
 
-      {/* Recursos disponibles */}
       <Card className="p-6">
         <h3 className="text-lg font-semibold mb-4">
           Seleccionar recursos <span className="text-red-500">*</span>
@@ -205,9 +162,7 @@ const SeleccionRecursosConValidacion = ({
               className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="">Todos los tipos</option>
-              {tiposDisponibles.map(t => (
-                <option key={t} value={t}>{t}</option>
-              ))}
+              {tiposDisponibles.map(t => <option key={t} value={t}>{tipoNombreMap[t] || t}</option>)}
             </select>
             <select
               value={estadoFiltro}
@@ -215,52 +170,58 @@ const SeleccionRecursosConValidacion = ({
               className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="">Todos los estados</option>
-              {estadosDisponibles.map(e => (
-                <option key={e} value={e}>{e}</option>
-              ))}
+              {estadosDisponibles.map(e => <option key={e} value={e}>{e}</option>)}
             </select>
           </div>
           {fechaInicio && (
-            <div className="text-xs text-gray-600">Mostrando disponibilidad para {new Date(fechaInicio).toLocaleString()} por {duracionHoras} hora(s)</div>
+            <div className="text-xs text-gray-600">
+              Mostrando disponibilidad para {(() => { const s = fechaInicio; const m = String(s||'').match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?/); if (!m) return ''; const [_, y, mo, d, h, mi, se] = m; const ms = Date.UTC(parseInt(y), parseInt(mo)-1, parseInt(d), parseInt(h), parseInt(mi), parseInt(se||'0')) + (5*60*60*1000); const date = new Date(ms); return date.toLocaleString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'America/Lima' }); })()}
+            </div>
           )}
         </div>
 
-        {recursosDisponibles.length === 0 ? (
+        {recursos.length === 0 ? (
           <div className="text-center py-8 text-gray-500">
             <div className="text-4xl mb-2">🚫</div>
             <p>No hay recursos disponibles para el horario seleccionado</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {recursosFiltrados.map((recurso) => {
-              const seleccionado = estaSeleccionado(recurso);
+          <div className="divide-y divide-gray-100 border border-gray-200 rounded-lg">
+            {recursosFiltrados.map((x) => { const recurso = x.recurso || {};
+              const seleccionado = recursosSeleccionados.some(r => r.idRecurso === recurso.idRecurso);
+              const estaDisponible = (x.estadoDisponibilidad || '').toLowerCase() === 'disponible';
               return (
                 <div
                   key={recurso.idRecurso}
-                  className={`border-2 rounded-lg p-4 cursor-pointer transition-all ${
-                    seleccionado
-                      ? 'border-blue-500 bg-blue-50'
-                      : 'border-gray-200 hover:border-gray-300'
-                  }`}
-                  onClick={() => toggleRecurso(recurso)}
+                  className={`p-4 transition-colors ${seleccionado ? 'bg-blue-50' : 'hover:bg-gray-50'} ${!estaDisponible ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}
+                  onClick={() => estaDisponible && toggleRecurso(recurso)}
                 >
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
-                      <h4 className="font-medium text-gray-800">
-                        {recurso.nombre}
-                      </h4>
-                      <p className="text-sm text-gray-600 mt-1">
-                        {recurso.descripcion}
-                      </p>
+                      <div className="flex items-center">
+                        <h4 className="font-medium text-gray-800 mr-2">{recurso.nombre}</h4>
+                        {recurso.idTipo && (
+                          <span className="px-2 py-0.5 bg-gray-100 text-gray-600 text-xs rounded-full">{tipoNombreMap[recurso.idTipo] || recurso.idTipo}</span>
+                        )}
+                      </div>
+                      {recurso.descripcion && <p className="text-sm text-gray-600 mt-1">{recurso.descripcion}</p>}
                       <div className="mt-2 space-y-2">
-                        <p className="text-sm">
-                          <span className="font-medium">Tarifa:</span> 
-                          S/. {parseFloat(recurso.tarifaHora).toFixed(2)}/hora
-                        </p>
-                        <p className="text-sm">
-                          <span className="font-medium">Ubicación:</span> 
-                          {recurso.ubicacion}
-                        </p>
+                        <p className="text-sm"><span className="font-medium">Tarifa:</span> S/. {parseFloat(recurso.tarifaHora).toFixed(2)}/hora</p>
+                        {recurso.ubicacion && <p className="text-sm"><span className="font-medium">Ubicación:</span> {recurso.ubicacion}</p>}
+                        <div className={`text-sm ${estaDisponible ? 'text-green-700' : 'text-red-700'}`}>
+                          {estaDisponible ? '✅ Disponible ahora' : (() => {
+                            if (!x.horaDisponible) return '⛔ No disponible';
+                            const desde = new Date(fechaInicio);
+                            const hasta = new Date(x.horaDisponible);
+                            const diffMs = Math.max(0, hasta - desde);
+                            const totalMin = Math.round(diffMs / 60000);
+                            const horas = Math.floor(totalMin / 60);
+                            const mins = totalMin % 60;
+                            const enStr = `${horas > 0 ? horas + 'h ' : ''}${mins}min`;
+                            const horaStr = hasta.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                            return `⛔ No disponible. Disponible a las ${horaStr} (en ${enStr})`;
+                          })()}
+                        </div>
                         {seleccionado && (
                           <div className="flex items-center gap-2">
                             <label className="text-sm">Horas:</label>
@@ -275,18 +236,13 @@ const SeleccionRecursosConValidacion = ({
                               }}
                               className="w-20 px-2 py-1 border border-gray-300 rounded"
                             />
-                           <span className="text-xs text-gray-500">Total: S/. {(parseFloat(recurso.tarifaHora) * (parseInt(recursosSeleccionados.find(r => r.idRecurso === recurso.idRecurso)?.horasSolicitadas, 10) || (parseInt(duracionHoras, 10) || 1))).toFixed(2)}</span>
+                            <span className="text-xs text-gray-500">Total: S/. {(parseFloat(recurso.tarifaHora) * (parseInt(recursosSeleccionados.find(r => r.idRecurso === recurso.idRecurso)?.horasSolicitadas, 10) || (parseInt(duracionHoras, 10) || 1))).toFixed(2)}</span>
                           </div>
                         )}
                       </div>
                     </div>
                     <div className="ml-3">
-                      <input
-                        type="checkbox"
-                        readOnly
-                        checked={seleccionado}
-                        className="w-5 h-5 text-blue-600 border-gray-300 rounded"
-                      />
+                      <input type="checkbox" readOnly checked={seleccionado} className="w-5 h-5 text-blue-600 border-gray-300 rounded" />
                     </div>
                   </div>
                 </div>
@@ -296,45 +252,6 @@ const SeleccionRecursosConValidacion = ({
         )}
       </Card>
 
-      {/* Resumen de selección */}
-      {recursosSeleccionados.length > 0 && (
-        <Card className="p-4 bg-blue-50 border-blue-200">
-          <h4 className="font-semibold text-blue-800 mb-2">
-            Resumen de Selección
-          </h4>
-          <div className="space-y-2">
-            <p className="text-sm text-blue-700">
-              <span className="font-medium">Recursos seleccionados:</span> {recursosSeleccionados.length}
-            </p>
-            <p className="text-sm text-blue-700">
-              <span className="font-medium">Duración total:</span> {duracionHoras * recursosSeleccionados.length} horas-recurso
-            </p>
-            {duracionHoras && (
-              <p className="text-lg font-semibold text-blue-800">
-                <span className="font-medium">Costo total estimado:</span> ${calcularCostoTotal().toFixed(2)}
-              </p>
-            )}
-          </div>
-
-          <div className="mt-3 flex space-x-2">
-            <Button
-              onClick={() => setRecursosSeleccionados([])}
-              variant="outline"
-              size="sm"
-            >
-              Limpiar Selección
-            </Button>
-            <Button
-              onClick={validarSeleccionCompleta}
-              variant="primary"
-              size="sm"
-              disabled={!validacionGlobal.valida}
-            >
-              Revalidar Disponibilidad
-            </Button>
-          </div>
-        </Card>
-      )}
     </div>
   );
 };

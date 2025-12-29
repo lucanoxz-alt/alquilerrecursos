@@ -1,15 +1,16 @@
-// src/pages/admin/GestionarReservasPage.jsx
+// src/pages/admin/GestionarReservas/GestionarReservasPage.jsx
 import React, { useState } from 'react';
 import { Calendar, Plus, X } from 'lucide-react';
 import BusquedaCliente from '../GestionarAlquileres/components/BusquedaCliente';
 import FormularioNuevoCliente from '../GestionarAlquileres/components/FormularioNuevoCliente';
-import SeleccionRecursos from '../GestionarAlquileres/components/SeleccionRecursos';
+import SeleccionRecursosReserva from './components/SeleccionRecursosReserva';
 import SeleccionMetodoPago from '../GestionarAlquileres/components/SeleccionMetodoPago';
-import TarjetaResumenReserva from './components/TarjetaResumenReserva';
 import ListaReservasRecientes from './components/ListaReservasRecientes';
+import TarjetaResumenReserva from './components/TarjetaResumenReserva';
 import api, { promocionService, reservaService, getCurrentUserId } from '../../../services/api';
 
 const GestionarReservasPage = () => {
+  // Vista: 'lista' | 'nuevo'
   const [vistaActual, setVistaActual] = useState('lista');
   const [actualizarLista, setActualizarLista] = useState(0);
 
@@ -18,11 +19,11 @@ const GestionarReservasPage = () => {
   const [showNewClientForm, setShowNewClientForm] = useState(false);
   const [queryBusqueda, setQueryBusqueda] = useState('');
 
-  // Recursos seleccionados (reutilizamos el mismo selector)
-  const [selectedResources, setSelectedResources] = useState([]);
+  // Fecha y hora de inicio
+  const [fechaHoraInicio, setFechaHoraInicio] = useState('');
 
-  // Fecha/hora de inicio prevista para la reserva
-  const [fechaHoraInicioPrevista, setFechaHoraInicioPrevista] = useState('');
+  // Recursos seleccionados (cada recurso puede tener horasSolicitadas)
+  const [selectedResources, setSelectedResources] = useState([]);
 
   const handleClientSelected = (client) => {
     setSelectedClient(client);
@@ -35,17 +36,16 @@ const GestionarReservasPage = () => {
     setQueryBusqueda('');
   };
 
-  // Para disponibilidad y resumen, calculamos total de horas solicitadas como en alquileres
   const totalHoras = selectedResources.reduce(
     (sum, r) => sum + (parseInt(r.horasSolicitadas, 10) || 0),
     0
   );
 
-  // Promociones (mismo flujo visual que Alquileres)
   const [promosActivas, setPromosActivas] = React.useState([]);
   const [promoAplicable, setPromoAplicable] = React.useState(null);
 
   React.useEffect(() => {
+    // Cargar promociones activas
     (async () => {
       try {
         const promos = await promocionService.obtenerActivas();
@@ -57,6 +57,7 @@ const GestionarReservasPage = () => {
   }, []);
 
   React.useEffect(() => {
+    // Determinar promoción aplicable en base a totalHoras y condicionMinima
     if (!Array.isArray(promosActivas) || promosActivas.length === 0 || totalHoras <= 0) {
       setPromoAplicable(null);
       return;
@@ -66,6 +67,7 @@ const GestionarReservasPage = () => {
       setPromoAplicable(null);
       return;
     }
+    // Escoger la mayor porcentajeDesc
     const mejor = elegibles.reduce((best, p) => {
       const pct = parseFloat(p.porcentajeDesc || p.porcentajeDescuento || 0);
       const bestPct = parseFloat(best?.porcentajeDesc || best?.porcentajeDescuento || 0);
@@ -76,13 +78,15 @@ const GestionarReservasPage = () => {
 
   const handleSubmitReserva = async (metodoPago) => {
     if (!selectedClient) {
-      alert('Por favor selecciona un turista');
+      alert('Por favor selecciona un cliente');
       return;
     }
-    if (!fechaHoraInicioPrevista) {
+
+    if (!fechaHoraInicio) {
       alert('Por favor selecciona fecha y hora de inicio');
       return;
     }
+
     if (selectedResources.length === 0) {
       alert('Por favor selecciona al menos un recurso');
       return;
@@ -91,40 +95,43 @@ const GestionarReservasPage = () => {
     try {
       const reservaData = {
         idTurista: selectedClient.idTurista,
-        fechaHoraInicioPrevista,
-        idPromocion: promoAplicable?.idPromocion || null,
-        metodoPago: metodoPago,
-        idUsuarioGestor: getCurrentUserId(),
+        fechaHoraInicioPrevista: fechaHoraInicio,
         recursos: selectedResources.map((r) => ({
           idRecurso: r.idRecurso,
           horasSolicitadas: parseInt(r.horasSolicitadas, 10) || 1,
         })),
+        metodoPago: metodoPago,
+        idPromocion: promoAplicable?.idPromocion || null,
+        idUsuarioGestor: getCurrentUserId() || undefined,
       };
 
-      const reservaCreada = await reservaService.crear(reservaData);
+      const response = await reservaService.crear(reservaData);
 
-      // Intentar descargar comprobante de pago de reserva (adelanto 50%)
+      // Limpiar formulario después del éxito
+      setSelectedClient(null);
+      setFechaHoraInicio('');
+      setSelectedResources([]);
+
+      alert('Reserva registrada exitosamente');
+      console.log('Reserva creada:', response.data);
+
+      // Generar comprobante de pago (50%)
       try {
-        const { data } = await api.get(`/comprobantes-pago-reserva/reserva/${reservaCreada.idReserva}/pdf`, { responseType: 'blob' });
+        const { data } = await api.get(`/comprobantes-pago-reserva/reserva/${response.data.idReserva}/pdf`, { responseType: 'blob' });
         const url = URL.createObjectURL(new Blob([data], { type: 'application/pdf' }));
         const a = document.createElement('a');
         a.href = url;
-        a.download = `comprobante_reserva_${reservaCreada.idReserva}.pdf`;
+        a.download = `comprobante_reserva_${response.data.idReserva}.pdf`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
         setTimeout(() => URL.revokeObjectURL(url), 60_000);
       } catch (e) {
-        console.warn('Reserva creada, pero no se pudo abrir el comprobante automáticamente:', e);
+        alert('Reserva creada, pero no se pudo descargar el comprobante automáticamente (¿sesión expirada?). Puedes generarlo desde la lista de reservas.');
       }
 
-      // Limpiar y volver a lista
-      setSelectedClient(null);
-      setSelectedResources([]);
-      setFechaHoraInicioPrevista('');
       setActualizarLista((prev) => prev + 1);
       setVistaActual('lista');
-      alert('Reserva registrada exitosamente');
     } catch (error) {
       console.error('Error al crear reserva:', error);
       const serverMsg = typeof error.response?.data === 'string' ? error.response.data : (error.response?.data?.message || error.message);
@@ -134,24 +141,18 @@ const GestionarReservasPage = () => {
 
   const renderVista = () => {
     if (vistaActual === 'lista') {
-      return (
-        <ListaReservasRecientes
-          actualizarLista={actualizarLista}
-          onVerDetalle={() => {}}
-        />
-      );
+      return <ListaReservasRecientes actualizarLista={actualizarLista} />;
     }
 
-    // Vista 'nueva' idéntica al layout de Gestionar Alquileres
     return (
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Columna izquierda: Cliente, recursos y configuración */}
+          {/* Sección izquierda: Cliente, fecha/hora y recursos */}
           <div className="lg:col-span-2 space-y-6">
             {/* Seleccionar cliente */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Turista <span className="text-red-500">*</span>
+                Cliente <span className="text-red-500">*</span>
               </label>
               <BusquedaCliente
                 query={queryBusqueda}
@@ -163,12 +164,13 @@ const GestionarReservasPage = () => {
               {selectedClient && (
                 <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded-lg flex justify-between items-center">
                   <span className="text-sm text-green-700">
-                    <strong>Turista seleccionado:</strong> {selectedClient.nombres} {selectedClient.apellidos} ({selectedClient.dniPasaporte})
+                    <strong>Cliente seleccionado:</strong> {selectedClient.nombres}{' '}
+                    {selectedClient.apellidos} ({selectedClient.dniPasaporte})
                   </span>
                   <button
                     onClick={handleClearClient}
                     className="text-green-700 hover:text-green-900"
-                    title="Quitar turista"
+                    title="Quitar cliente"
                   >
                     <X className="w-4 h-4" />
                   </button>
@@ -176,7 +178,7 @@ const GestionarReservasPage = () => {
               )}
             </div>
 
-            {/* Formulario para nuevo turista */}
+            {/* Formulario para nuevo cliente */}
             {showNewClientForm && (
               <FormularioNuevoCliente
                 onClose={() => setShowNewClientForm(false)}
@@ -184,43 +186,51 @@ const GestionarReservasPage = () => {
               />
             )}
 
-            {/* Seleccionar recursos (reutilizado) */}
-            <SeleccionRecursos
-              selectedResources={selectedResources}
-              onResourcesChange={setSelectedResources}
-              fechaInicio={fechaHoraInicioPrevista}
-              duracionHoras={totalHoras || 1}
-              label="Recursos a reservar"
-            />
-
-            {/* Fecha y hora de inicio (reubicado debajo de recursos) */}
+            {/* Seleccionar fecha y hora de inicio */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Fecha y Hora de Inicio <span className="text-red-500">*</span></label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Fecha y Hora de Inicio <span className="text-red-500">*</span>
+              </label>
               <input
                 type="datetime-local"
-                value={fechaHoraInicioPrevista}
-                onChange={(e) => setFechaHoraInicioPrevista(e.target.value)}
+                value={fechaHoraInicio}
+                onChange={(e) => setFechaHoraInicio(e.target.value)}
                 min={new Date().toISOString().slice(0, 16)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 required
               />
+              {!fechaHoraInicio && (
+                <div className="mt-2 text-sm text-gray-600">
+                  <strong>Seleccione la fecha y hora de inicio para ver los recursos disponibles en ese momento.</strong>
+                </div>
+              )}
             </div>
 
+            {/* Seleccionar recursos */}
+            {fechaHoraInicio && (
+              <SeleccionRecursosReserva
+                selectedResources={selectedResources}
+                fechaInicio={fechaHoraInicio}
+                duracionHoras={totalHoras || 1}
+                onResourcesChange={(recursos) => setSelectedResources(Array.isArray(recursos) ? recursos : [])}
+              />
+            )}
+
             {/* Método de pago */}
-            <SeleccionMetodoPago onSubmit={handleSubmitReserva} submitLabel="Registrar Reserva" />
+            <SeleccionMetodoPago onSubmit={handleSubmitReserva} />
           </div>
 
-          {/* Columna derecha: Resumen */}
+          {/* Sección derecha: Resumen y acciones */}
           <div className="bg-blue-50 rounded-xl p-6 h-fit">
             <TarjetaResumenReserva
               cliente={selectedClient}
               recursos={selectedResources}
               duracionHoras={totalHoras}
-              fechaInicio={fechaHoraInicioPrevista}
+              fechaInicio={fechaHoraInicio}
               promocionAplicada={promoAplicable && {
                 idPromocion: promoAplicable.idPromocion,
                 nombre: promoAplicable.nombre,
-                porcentajeDesc: parseFloat(promoAplicable.porcentajeDesc || promoAplicable.porcentajeDescuento || 0)
+                porcentajeDescuento: parseFloat(promoAplicable.porcentajeDesc || promoAplicable.porcentajeDescuento || 0)
               }}
             />
           </div>
@@ -235,12 +245,12 @@ const GestionarReservasPage = () => {
         <div className="flex flex-col md:flex-row md:items-center md:justify-between">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Gestionar Reservas</h1>
-            <p className="text-gray-600 mt-2">Registra y gestiona las reservas de recursos turísticos.</p>
+            <p className="text-gray-600 mt-2">Registra nuevas reservas de recursos turísticos.</p>
           </div>
           <div className="mt-4 md:mt-0 flex items-center space-x-3">
             {vistaActual === 'lista' ? (
               <button
-                onClick={() => setVistaActual('nueva')}
+                onClick={() => setVistaActual('nuevo')}
                 className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center"
               >
                 <Plus className="w-4 h-4 mr-2" /> Nueva Reserva

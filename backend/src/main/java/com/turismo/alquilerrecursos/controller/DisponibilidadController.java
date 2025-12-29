@@ -64,6 +64,24 @@ public class DisponibilidadController {
     }
 
     /**
+     * Obtener disponibilidad detallada para todos los recursos en un horario
+     * GET /api/disponibilidad/recursos/detalle?fechaInicio=2024-01-15T10:00:00&duracionHoras=2
+     */
+    @GetMapping("/recursos/detalle")
+    public ResponseEntity<Map<String, Object>> obtenerDetalleRecursos(
+            @RequestParam String fechaInicio,
+            @RequestParam int duracionHoras) {
+        LocalDateTime fecha = LocalDateTime.parse(fechaInicio);
+        var detalle = disponibilidadService.obtenerDisponibilidadDetallada(fecha, duracionHoras);
+        Map<String, Object> response = new HashMap<>();
+        response.put("detalle", detalle);
+        response.put("fechaInicio", fechaInicio);
+        response.put("duracionHoras", duracionHoras);
+        response.put("totalRecursos", detalle.size());
+        return ResponseEntity.ok(response);
+    }
+
+    /**
      * Verificar disponibilidad para múltiples recursos
      * POST /api/disponibilidad/verificar-multiple
      */

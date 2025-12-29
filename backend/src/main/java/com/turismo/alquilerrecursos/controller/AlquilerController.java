@@ -76,6 +76,7 @@ public class AlquilerController {
     @GetMapping("/enriquecidos")
     public ResponseEntity<List<AlquilerListadoDTO>> obtenerAlquileresEnriquecidos() {
         List<Alquiler> alquileres = alquilerRepository.findAll();
+        java.time.format.DateTimeFormatter formato = java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy, HH:mm").withZone(java.time.ZoneId.of("America/Lima"));
         List<AlquilerListadoDTO> dtos = alquileres.stream().map(a -> {
             String nombreCliente = null;
             try {
@@ -101,7 +102,7 @@ public class AlquilerController {
                 }
             } catch (Exception ignored) {}
 
-            return new AlquilerListadoDTO(
+            AlquilerListadoDTO dto = new AlquilerListadoDTO(
                 a.getIdAlquiler(),
                 a.getIdTurista(),
                 (nombreCliente != null && !nombreCliente.isEmpty()) ? nombreCliente : null,
@@ -112,6 +113,10 @@ public class AlquilerController {
                 nombresRecursos,
                 nombresRecursos.size()
             );
+            try {
+                if (a.getFechaHoraInicio() != null) dto.setFechaHoraInicioFmt(a.getFechaHoraInicio().format(formato));
+            } catch (Exception ignored) {}
+            return dto;
         }).toList();
         return ResponseEntity.ok(dtos);
     }
@@ -151,5 +156,107 @@ public class AlquilerController {
     public ResponseEntity<List<Alquiler>> obtenerAlquileresActivos() {
         List<Alquiler> alquileres = alquilerRepository.findByEstadoalquiler("Activo");
         return ResponseEntity.ok(alquileres);
+    }
+
+    // ---------------- Comprobantes: ticket, factura y xml ----------------
+    @Autowired
+    private com.turismo.alquilerrecursos.service.ComprobantePagoService comprobantePagoService;
+
+    @GetMapping("/{idAlquiler}/ticket")
+    public ResponseEntity<byte[]> verTicket(@PathVariable String idAlquiler) {
+        Alquiler a = alquilerRepository.findById(idAlquiler).orElseThrow(() -> new RuntimeException("Alquiler no encontrado: " + idAlquiler));
+        if (!"Activo".equalsIgnoreCase(a.getEstadoalquiler()) && !"Finalizado".equalsIgnoreCase(a.getEstadoalquiler())) {
+            return ResponseEntity.badRequest().body(null);
+        }
+        var data = comprobantePagoService.generarDatosComprobantePagoPorAlquiler(idAlquiler);
+        data.put("tipo", "TICKET");
+        byte[] pdf = comprobantePagoService.generarPDFDesdeDatos(data);
+        String num = String.valueOf(((java.util.Map)data.get("pago")).get("num"));
+        org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
+        headers.setContentType(org.springframework.http.MediaType.APPLICATION_PDF);
+        headers.set("Content-Disposition", "attachment; filename=\"TICKET-" + (num != null ? num : idAlquiler) + ".pdf\"");
+        return ResponseEntity.ok().headers(headers).body(pdf);
+    }
+
+    @GetMapping("/{idAlquiler}/factura")
+    public ResponseEntity<byte[]> verFactura(@PathVariable String idAlquiler) {
+        Alquiler a = alquilerRepository.findById(idAlquiler).orElseThrow(() -> new RuntimeException("Alquiler no encontrado: " + idAlquiler));
+        if (!"Activo".equalsIgnoreCase(a.getEstadoalquiler()) && !"Finalizado".equalsIgnoreCase(a.getEstadoalquiler())) {
+            return ResponseEntity.badRequest().body(null);
+        }
+        var data = comprobantePagoService.generarDatosComprobantePagoPorAlquiler(idAlquiler);
+        data.put("tipo", "FACTURA");
+        byte[] pdf = comprobantePagoService.generarPDFDesdeDatos(data);
+        String num = String.valueOf(((java.util.Map)data.get("pago")).get("num"));
+        org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
+        headers.setContentType(org.springframework.http.MediaType.APPLICATION_PDF);
+        headers.set("Content-Disposition", "attachment; filename=\"FACTURA-" + (num != null ? num : idAlquiler) + ".pdf\"");
+        return ResponseEntity.ok().headers(headers).body(pdf);
+    }
+
+    @GetMapping("/{idAlquiler}/xml")
+    public ResponseEntity<String> descargarXML(@PathVariable String idAlquiler) {
+        Alquiler a = alquilerRepository.findById(idAlquiler).orElseThrow(() -> new RuntimeException("Alquiler no encontrado: " + idAlquiler));
+        if (!"Activo".equalsIgnoreCase(a.getEstadoalquiler()) && !"Finalizado".equalsIgnoreCase(a.getEstadoalquiler())) {
+            return ResponseEntity.badRequest().body("Alquiler no autorizado para generar comprobante");
+        }
+        var data = comprobantePagoService.generarDatosComprobantePagoPorAlquiler(idAlquiler);
+        String xml = comprobantePagoService.generarXMLDesdeDatos(data);
+        org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
+        headers.setContentType(org.springframework.http.MediaType.APPLICATION_XML);
+        headers.set("Content-Disposition", "attachment; filename=\"COMPROBANTE-" + idAlquiler + ".xml\"");
+        return ResponseEntity.ok().headers(headers).body(xml);
+    }
+
+    /**
+     * Corregir la fecha de inicio de un alquiler (admin)
+     */
+    @Autowired
+    private com.turismo.alquilerrecursos.repository.PagoRepository pagoRepository;
+
+    @PutMapping("/{idAlquiler}/corregir-fecha")
+    public ResponseEntity<?> corregirFecha(@PathVariable String idAlquiler, @RequestBody java.util.Map<String, String> body) {
+        String fechaStr = body.get("fechaHoraInicio");
+        if (fechaStr == null || fechaStr.isBlank()) {
+            return ResponseEntity.badRequest().body(java.util.Map.of("error", "Campo 'fechaHoraInicio' requerido"));
+        }
+        Alquiler a = alquilerRepository.findById(idAlquiler).orElseThrow(() -> new RuntimeException("Alquiler no encontrado: " + idAlquiler));
+        try {
+            java.time.LocalDateTime nueva = parseToLocalDateTime(fechaStr);
+            a.setFechaHoraInicio(nueva);
+            if (a.getDuracionHoras() != null) a.setFechaHoraFin(nueva.plusHours(a.getDuracionHoras()));
+            alquilerRepository.save(a);
+            return ResponseEntity.ok(a);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(java.util.Map.of("error", "Formato de fecha inválido: " + e.getMessage()));
+        }
+    }
+
+    @PostMapping("/{idAlquiler}/sync-fecha-desde-pago")
+    public ResponseEntity<?> sincronizarFechaDesdePago(@PathVariable String idAlquiler) {
+        Alquiler a = alquilerRepository.findById(idAlquiler).orElseThrow(() -> new RuntimeException("Alquiler no encontrado: " + idAlquiler));
+        com.turismo.alquilerrecursos.model.Pago pago = pagoRepository.findByIdAlquiler(idAlquiler);
+        if (pago == null) return ResponseEntity.badRequest().body(java.util.Map.of("error", "No se encontró pago para este alquiler"));
+        a.setFechaHoraInicio(pago.getFechaEmision());
+        if (a.getDuracionHoras() != null) a.setFechaHoraFin(a.getFechaHoraInicio().plusHours(a.getDuracionHoras()));
+        alquilerRepository.save(a);
+        return ResponseEntity.ok(a);
+    }
+
+    private java.time.LocalDateTime parseToLocalDateTime(String s) {
+        // Intenta varios formatos y manejo de offsets
+        try {
+            return java.time.LocalDateTime.parse(s);
+        } catch (java.time.format.DateTimeParseException ignored) {}
+        try {
+            java.time.OffsetDateTime odt = java.time.OffsetDateTime.parse(s);
+            return odt.atZoneSameInstant(java.time.ZoneId.systemDefault()).toLocalDateTime();
+        } catch (java.time.format.DateTimeParseException ignored) {}
+        try {
+            java.time.format.DateTimeFormatter f = java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
+            return java.time.LocalDateTime.parse(s, f);
+        } catch (java.time.format.DateTimeParseException e) {
+            throw new RuntimeException(e.getMessage());
+        }
     }
 }

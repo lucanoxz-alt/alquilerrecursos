@@ -11,6 +11,36 @@ import java.util.List;
 import java.util.Optional;
 
 @Service
+class RecursoEstadoReconciliador {
+    @org.springframework.beans.factory.annotation.Autowired private com.turismo.alquilerrecursos.repository.RecursoRepository recursoRepository;
+    @org.springframework.beans.factory.annotation.Autowired private com.turismo.alquilerrecursos.repository.AlquilerRepository alquilerRepository;
+    @org.springframework.beans.factory.annotation.Autowired private com.turismo.alquilerrecursos.repository.DetalleAlquilerRepository detalleAlquilerRepository;
+    @jakarta.annotation.PostConstruct
+    public void reconcileOnStartup() {
+        try {
+            java.time.LocalDateTime ahora = java.time.LocalDateTime.now();
+            java.util.Set<String> ocupados = new java.util.HashSet<>();
+            for (com.turismo.alquilerrecursos.model.Alquiler a : alquilerRepository.findByEstadoalquiler("Activo")) {
+                List<com.turismo.alquilerrecursos.model.DetalleAlquiler> detalles = detalleAlquilerRepository.findByIdAlquiler(a.getIdAlquiler());
+                for (com.turismo.alquilerrecursos.model.DetalleAlquiler d : detalles) {
+                    java.time.LocalDateTime fin = a.getFechaHoraInicio() != null && d.getHorasRealizadas() != null ? a.getFechaHoraInicio().plusHours(d.getHorasRealizadas()) : a.getFechaHoraFin();
+                    if (fin != null && ahora.isBefore(fin)) {
+                        ocupados.add(d.getIdRecurso());
+                    }
+                }
+            }
+            recursoRepository.findAll().forEach(r -> {
+                String estado = String.valueOf(r.getEstado());
+                if ("Alquilado".equalsIgnoreCase(estado) && !ocupados.contains(r.getIdRecurso())) {
+                    r.setEstado("Disponible");
+                    recursoRepository.save(r);
+                }
+            });
+        } catch (Exception ignored) {}
+    }
+}
+
+@Service
 public class RecursoService {
 
     @Autowired

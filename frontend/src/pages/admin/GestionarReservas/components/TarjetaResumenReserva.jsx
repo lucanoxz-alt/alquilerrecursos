@@ -98,7 +98,7 @@ const TarjetaResumenReserva = ({
           <div className="space-y-1">
             <div className="text-sm text-orange-700 font-medium">{duracionHoras} hora{duracionHoras > 1 ? 's' : ''}</div>
             {fechaInicio && (
-              <div className="text-xs text-orange-600">Inicio: {new Date(fechaInicio).toLocaleString()}</div>
+              <div className="text-xs text-orange-600">Inicio: {(() => { const s = fechaInicio; const m = String(s||'').match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?/); if (!m) return ''; const [_, y, mo, d, h, mi, se] = m; const ms = Date.UTC(parseInt(y), parseInt(mo)-1, parseInt(d), parseInt(h), parseInt(mi), parseInt(se||'0')) + (5*60*60*1000); const date = new Date(ms); return date.toLocaleString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'America/Lima' }); })()}</div>
             )}
           </div>
         ) : (

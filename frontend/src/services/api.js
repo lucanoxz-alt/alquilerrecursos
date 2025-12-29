@@ -25,7 +25,10 @@ api.interceptors.request.use(
     token = token || lsUser.token || lsUser.accessToken || lsUser.jwt || lsUser.idToken;
     token = token || ssUser.token || ssUser.accessToken || ssUser.jwt || ssUser.idToken;
 
-    if (token) {
+    const url = config.url || '';
+    // No enviar Authorization en endpoints públicos de comprobantes
+    const isPublicComprobante = /\/alquileres\/[^/]+\/(ticket|factura|xml)$/.test(url) || url.includes('/comprobantes-pago/');
+    if (token && !isPublicComprobante) {
       config.headers = config.headers || {};
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -69,7 +72,8 @@ export const disponibilidadService = {
       const response = await api.get('/disponibilidad/recursos', {
         params: { fechaInicio, duracionHoras }
       });
-      return response.data;
+      // El backend devuelve { recursosDisponibles: [...], ... }
+      return response.data?.recursosDisponibles || [];
     } catch (error) {
       console.error('Error obteniendo recursos disponibles:', error);
       throw error;

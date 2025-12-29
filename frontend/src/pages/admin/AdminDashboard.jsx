@@ -1,6 +1,7 @@
 // src/pages/admin/AdminDashboard.jsx
 import React, { useState, useEffect } from 'react';
 import { Package, DollarSign, Users, MapPin, Plus, Search, Edit, Trash2, Filter, RefreshCw, FileText } from 'lucide-react';
+import api from '../../services/api';
 
 const AdminDashboard = ({ user }) => {
   const [stats, setStats] = useState({
@@ -13,9 +14,16 @@ const AdminDashboard = ({ user }) => {
   const [loading, setLoading] = useState(true);
 
   // Función para ver boleta
-  const verBoleta = (idAlquiler) => {
-    const url = `http://localhost:8080/api/boletas/${idAlquiler}/html`;
-    window.open(url, '_blank', 'width=800,height=600,scrollbars=yes');
+  const verBoleta = async (idAlquiler) => {
+    try {
+      const { data } = await api.get(`/boletas/${idAlquiler}/pdf`, { responseType: 'blob' });
+      const url = URL.createObjectURL(new Blob([data], { type: 'application/pdf' }));
+      window.open(url, '_blank', 'width=800,height=600,scrollbars=yes');
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (e) {
+      console.error('Error al abrir boleta PDF desde dashboard', e);
+      alert('No se pudo abrir la boleta en PDF.');
+    }
   };
 
   // Cargar datos reales del dashboard
@@ -42,25 +50,20 @@ const AdminDashboard = ({ user }) => {
         } : { 'Content-Type': 'application/json' };
 
         // Cargar datos reales en paralelo
-        const [alquileresRes, turistasRes, recursosRes] = await Promise.allSettled([
-          fetch('http://localhost:8080/api/alquileres', { headers }),
-          fetch('http://localhost:8080/api/turistas', { headers }),
-          fetch('http://localhost:8080/api/recursos', { headers })
-        ]);
-
         let alquileresData = [];
         let turistasData = [];
         let recursosData = [];
-
-        // Procesar respuestas
-        if (alquileresRes.status === 'fulfilled' && alquileresRes.value.ok) {
-          alquileresData = await alquileresRes.value.json();
-        }
-        if (turistasRes.status === 'fulfilled' && turistasRes.value.ok) {
-          turistasData = await turistasRes.value.json();
-        }
-        if (recursosRes.status === 'fulfilled' && recursosRes.value.ok) {
-          recursosData = await recursosRes.value.json();
+        try {
+          const [alq, tur, rec] = await Promise.all([
+            api.get('/alquileres/enriquecidos'),
+            api.get('/turistas'),
+            api.get('/recursos')
+          ]);
+          alquileresData = alq.data || [];
+          turistasData = tur.data || [];
+          recursosData = rec.data || [];
+        } catch (e) {
+          console.warn('Error cargando datos del dashboard', e);
         }
 
         // Configurar estadísticas reales
@@ -73,7 +76,7 @@ const AdminDashboard = ({ user }) => {
 
         // Mapear alquileres más recientes (últimos 5)
         const alquileresRecientes = alquileresData
-          .sort((a, b) => new Date(b.fechaHoraInicio) - new Date(a.fechaHoraInicio))
+          .sort((a, b) => { const aIso = a.fechaHoraInicio && !String(a.fechaHoraInicio).endsWith('Z') ? `${a.fechaHoraInicio}Z` : a.fechaHoraInicio; const bIso = b.fechaHoraInicio && !String(b.fechaHoraInicio).endsWith('Z') ? `${b.fechaHoraInicio}Z` : b.fechaHoraInicio; return new Date(bIso) - new Date(aIso); })
           .slice(0, 5)
           .map(alq => {
             // Buscar turista real
@@ -86,7 +89,7 @@ const AdminDashboard = ({ user }) => {
               id: alq.idAlquiler,
               cliente: nombreCliente,
               recurso: `${alq.detalles?.length || 1} recurso${alq.detalles?.length > 1 ? 's' : ''}`,
-              fecha: new Date(alq.fechaHoraInicio).toLocaleDateString('es-PE'),
+              fecha: (() => { const d = parseLocalLima(alq.fechaHoraInicio); return d ? d.toLocaleString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'America/Lima' }) : ''; })(),
               monto: alq.costoTotal || 0,
               estado: alq.estadoalquiler
             };

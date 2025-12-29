@@ -22,6 +22,8 @@ import java.util.Collections;
 @Component
 public class JwtAuthFilter extends OncePerRequestFilter {
 
+    private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(JwtAuthFilter.class);
+
     @Autowired
     private JwtUtil jwtUtil;
 
@@ -35,6 +37,14 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         @NonNull FilterChain filterChain
     ) throws ServletException, IOException {
         String jwt = parseJwt(request);
+
+        // Short-circuit: si es una petición a comprobantes públicos, no procesar el token para evitar 401s por tokens mal formados
+        if (isPublicComprobanteRequest(request)) {
+            logger.debug("Petición a comprobante públicamente accesible: {}", request.getRequestURI());
+            filterChain.doFilter(request, response);
+            return;
+        }
+
         if (StringUtils.hasText(jwt)) {
             try {
                 String username = jwtUtil.extractUsername(jwt);
@@ -50,7 +60,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                     }
 
                     // Validar el token con los detalles del usuario cargado
-                    if (jwtUtil.validateToken(jwt, userDetails)) {
+                    if (userDetails != null && jwtUtil.validateToken(jwt, userDetails)) {
                         UsernamePasswordAuthenticationToken authentication =
                             new UsernamePasswordAuthenticationToken(
                                 userDetails,
@@ -60,14 +70,13 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                         authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
                         SecurityContextHolder.getContext().setAuthentication(authentication);
                         logger.debug("Token JWT autenticado para el usuario: " + username);
-                    } else {
+                    } else if (userDetails != null) {
                         logger.warn("Token JWT inválido para el usuario: " + username);
                         response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
                         return; // Salir inmediatamente
                     }
                 }
             } catch (io.jsonwebtoken.ExpiredJwtException eje) {
-                // Token expirado: registrar a nivel debug y responder 401 sin stacktrace
                 logger.debug("Token JWT expirado", eje);
                 response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
                 return;
@@ -77,7 +86,20 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                 return; // Salir inmediatamente
             }
         }
+
         filterChain.doFilter(request, response);
+    }
+
+    private boolean isPublicComprobanteRequest(HttpServletRequest request) {
+        String uri = request.getRequestURI();
+        if (uri == null) return false;
+        // Permitir acceso público a comprobantes y endpoints relacionados (boleta/factura/xml)
+        if (uri.startsWith("/api/comprobantes-pago/")) return true;
+        // /api/alquileres/{id}/ticket | /factura | /xml
+        if (uri.matches("/api/alquileres/.*/(ticket|factura|xml)$")) return true;
+        // fallback permisivo: cualquier endpoint que termine en ticket/factura/xml
+        if (uri.endsWith("/ticket") || uri.endsWith("/factura") || uri.endsWith("/xml")) return true;
+        return false;
     }
 
     private String parseJwt(HttpServletRequest request) {

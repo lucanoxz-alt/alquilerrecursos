@@ -2,48 +2,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { FileText, RefreshCw, Search, Filter } from 'lucide-react';
 import api, { alquilerServiceExtended } from '../../../../services/api';
 
-// Obtiene un nombre legible del cliente a partir de distintas posibles estructuras
-const getClienteNombre = (r) => {
-  if (r?.nombreCliente) return r.nombreCliente;
-  if (r?.idTurista && nombreCache[r.idTurista]) return nombreCache[r.idTurista];
-  const t = r?.turista || r?.cliente || {};
-  const nombres = t.nombres || t.nombre || '';
-  const apellidos = t.apellidos || t.apellido || '';
-  const full = `${nombres} ${apellidos}`.trim();
-  if (full) return full;
-  // fallback por si solo tenemos id o documento
-  return t.dniPasaporte || r?.idTurista || '';
-};
+// Helper functions moved inside component to access nombreCache
 
-const exportToCSV = (rows) => {
-  if (!rows || rows.length === 0) return;
-  const headers = ['ID ALQUILER','CLIENTE','RECURSO(S)','FECHA','MONTO','ESTADO'];
-  const csvRows = [headers.join(',')];
-  rows.forEach(r => {
-    const recursos = (r.detalles || []).map(d => d.nombreRecurso || d.idRecurso).join(' | ');
-    const cliente = getClienteNombre(r) || '';
-    const fecha = r.fechaHoraInicio ? new Date(r.fechaHoraInicio).toLocaleString('es-PE') : '';
-    const monto = typeof r.costoTotal === 'number' ? r.costoTotal.toFixed(2) : r.costoTotal;
-    csvRows.push([
-      r.idAlquiler,
-      '"' + cliente + '"',
-      '"' + recursos + '"',
-      (r.detalles || []).length,
-      '"' + fecha + '"',
-      monto,
-      r.estadoalquiler
-    ].join(','));
-  });
-  const blob = new Blob([csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.setAttribute('download', `alquileres_${Date.now()}.csv`);
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(url);
-};
 
 const ListaAlquileresRecientes = ({ actualizarLista = 0, onVerDetalle }) => {
   const [alquileres, setAlquileres] = useState([]);
@@ -54,7 +14,61 @@ const ListaAlquileresRecientes = ({ actualizarLista = 0, onVerDetalle }) => {
   const [filtroEstado, setFiltroEstado] = useState(''); // placeholder visual
   const [openMenuId, setOpenMenuId] = useState(null);
 
-  const cargar = async () => {
+  // Obtiene un nombre legible del cliente a partir de distintas posibles estructuras
+  const getClienteNombre = (r) => {
+    if (r?.nombreCliente) return r.nombreCliente;
+    if (r?.idTurista && nombreCache[r.idTurista]) return nombreCache[r.idTurista];
+    const t = r?.turista || r?.cliente || {};
+    const nombres = t.nombres || t.nombre || '';
+    const apellidos = t.apellidos || t.apellido || '';
+    const full = `${nombres} ${apellidos}`.trim();
+    if (full) return full;
+    // fallback por si solo tenemos id o documento
+    return t.dniPasaporte || r?.idTurista || '';
+  };
+
+  const exportToCSV = (rows) => {
+    if (!rows || rows.length === 0) return;
+    const headers = ['ID ALQUILER','CLIENTE','RECURSO(S)','FECHA','MONTO','ESTADO'];
+    const csvRows = [headers.join(',')];
+    rows.forEach(r => {
+      const recursos = (r.detalles || []).map(d => d.nombreRecurso || d.idRecurso).join(' | ');
+      const cliente = getClienteNombre(r) || '';
+      const d = parseUtcToLima(r.fechaHoraInicio);
+      const fecha = d ? d.toLocaleString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'America/Lima' }) : '';
+      const monto = typeof r.costoTotal === 'number' ? r.costoTotal.toFixed(2) : r.costoTotal;
+      csvRows.push([
+        r.idAlquiler,
+        '"' + cliente + '"',
+        '"' + recursos + '"',
+        (r.detalles || []).length,
+        '"' + fecha + '"',
+        monto,
+        r.estadoalquiler
+      ].join(','));
+    });
+    const blob = new Blob([csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `alquileres_${Date.now()}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const parseLocalLima = (s) => {
+  if (!s) return null;
+  // Espera formato 'YYYY-MM-DDTHH:mm:ss' (LocalDateTime del backend)
+  const m = String(s).match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?/);
+  if (!m) return new Date(s);
+  const [_, y, mo, d, h, mi, se] = m;
+  const ms = Date.UTC(parseInt(y), parseInt(mo)-1, parseInt(d), parseInt(h), parseInt(mi), parseInt(se||'0')) + (5*60*60*1000); // UTC+5 para mostrar Lima
+  return new Date(ms);
+};
+
+const cargar = async () => {
     setLoading(true);
     setError('');
     try {
@@ -121,8 +135,8 @@ const ListaAlquileresRecientes = ({ actualizarLista = 0, onVerDetalle }) => {
     }
     // Orden coherente: fecha más reciente primero
     return [...base].sort((a, b) => {
-      const da = a.fechaHoraInicio ? new Date(a.fechaHoraInicio).getTime() : 0;
-      const db = b.fechaHoraInicio ? new Date(b.fechaHoraInicio).getTime() : 0;
+      const da = a.fechaHoraInicio ? parseLocalLima(a.fechaHoraInicio)?.getTime() || 0 : 0;
+      const db = b.fechaHoraInicio ? parseLocalLima(b.fechaHoraInicio)?.getTime() || 0 : 0;
       return db - da;
     });
   }, [alquileres, searchTerm, filtroEstado]);
@@ -200,7 +214,7 @@ const ListaAlquileresRecientes = ({ actualizarLista = 0, onVerDetalle }) => {
                       ? r.nombresRecursos.length
                       : (r.detalles || []).length}
                   </td>
-                  <td className="py-3 px-4 text-gray-700 whitespace-nowrap">{r.fechaHoraInicio ? new Date(r.fechaHoraInicio).toLocaleString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }) : ''}</td>
+                  <td className="py-3 px-4 text-gray-700 whitespace-nowrap">{(() => { const d = parseLocalLima(r.fechaHoraInicio); return d ? d.toLocaleString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'America/Lima' }) : ''; })()}</td>
                   <td className="py-3 px-4 text-gray-900 font-medium">S/. {typeof r.costoTotal === 'number' ? r.costoTotal.toFixed(2) : r.costoTotal}</td>
                   <td className="py-3 px-4">
                     <span className={`px-2 py-1 rounded-full text-xs font-medium ${r.estadoalquiler === 'Finalizado' ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'}`}>{r.estadoalquiler || '—'}</span>
@@ -209,21 +223,55 @@ const ListaAlquileresRecientes = ({ actualizarLista = 0, onVerDetalle }) => {
                     <div className="inline-flex items-center gap-2">
                       <button
                         onClick={async () => {
+                          const id = r.idAlquiler;
                           try {
-                            const { data } = await api.get(`/comprobantes-pago/alquiler/${r.idAlquiler}/pdf`, { responseType: 'blob' });
+                            const { data } = await api.get(`/alquileres/${id}/ticket`, { responseType: 'blob', headers: { /* evitar bearer */ } });
                             const url = URL.createObjectURL(new Blob([data], { type: 'application/pdf' }));
                             window.open(url, '_blank');
                             setTimeout(() => URL.revokeObjectURL(url), 60_000);
                           } catch (err) {
-                            console.error('Error al abrir boleta', err);
-                            alert('No se pudo abrir la boleta. ¿Tu sesión sigue activa?');
+                            console.warn('Error al abrir boleta (PDF)', err);
+                            const status = err?.response?.status;
+                            if (status === 401) {
+                              alert('Tu sesión expiró. Por favor inicia sesión para descargar la boleta.');
+                              window.location.href = '/login';
+                              return;
+                            }
+                            // Try HTML fallback
+                            try {
+                              const { data: html } = await api.get(`/boletas/${id}/html`, { responseType: 'text' });
+                              const w = window.open('', '_blank');
+                              w.document.write(html);
+                              w.document.close();
+                              return;
+                            } catch (err2) {
+                              console.warn('Fallback HTML falló', err2);
+                            }
+
+                            // Try comprobante-pago as last resort
+                            try {
+                              const { data } = await api.get(`/comprobantes-pago/alquiler/${id}/pdf`, { responseType: 'blob', headers: { Accept: 'application/pdf' } });
+                              const url = URL.createObjectURL(new Blob([data], { type: 'application/pdf' }));
+                              window.open(url, '_blank');
+                              setTimeout(() => URL.revokeObjectURL(url), 60_000);
+                              return;
+                            } catch (err3) {
+                              console.error('Todos los intentos fallaron', err, err3);
+                              if (err3?.response?.status === 401) {
+                                alert('Tu sesión expiró. Por favor inicia sesión.');
+                                window.location.href = '/login';
+                                return;
+                              }
+                            }
+
+                            alert('No se pudo abrir la boleta. Ver consola para más detalles.');
                           }
                         }}
                         className="flex flex-col items-center gap-1 px-3 py-2 text-sm rounded-lg bg-blue-600 hover:bg-blue-700 text-white"
                         title="Ver boleta"
                       >
                         <FileText className="w-4 h-4" />
-                        <span className="text-xs">Ver boleta</span>
+                        <span className="text-xs">Ver ticket</span>
                       </button>
 
                       {/* Ver más */}
@@ -240,27 +288,20 @@ const ListaAlquileresRecientes = ({ actualizarLista = 0, onVerDetalle }) => {
                             <div className="py-1">
                               <button
                                 onClick={async () => {
-                                  try { setOpenMenuId(null); const { data } = await api.get(`/comprobantes-pago/alquiler/${r.idAlquiler}/pdf`, { responseType: 'blob' }); const url = URL.createObjectURL(new Blob([data], { type: 'application/pdf' })); const a = document.createElement('a'); a.href = url; a.download = `boleta_${r.idAlquiler}.pdf`; document.body.appendChild(a); a.click(); document.body.removeChild(a); setTimeout(() => URL.revokeObjectURL(url), 60_000); } catch (err) { console.error('Error descargando Boleta', err); }
+                                  try {
+                                    setOpenMenuId(null);
+                                    const { data } = await api.get(`/boletas/${r.idAlquiler}/pdf`, { responseType: 'blob' });
+                                    const url = URL.createObjectURL(new Blob([data], { type: 'application/pdf' }));
+                                    const a = document.createElement('a'); a.href = url; a.download = `BOLETA_${r.idAlquiler}.pdf`; document.body.appendChild(a); a.click(); document.body.removeChild(a); setTimeout(() => URL.revokeObjectURL(url), 60_000);
+                                  } catch (err) {
+                                    console.error('Error descargando Boleta', err);
+                                    if (err.response && err.response.status === 401) { alert('Tu sesión expiró. Por favor inicia sesión.'); window.location.href = '/login'; return; }
+                                    alert('No se pudo descargar la Boleta. Ver consola.');
+                                  }
                                 }}
                                 className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                               >
                                 Boleta PDF
-                              </button>
-                              <button
-                                onClick={async () => {
-                                  try { setOpenMenuId(null); const { data } = await api.get(`/comprobantes-pago/alquiler/${r.idAlquiler}/pdf`, { responseType: 'blob' }); const url = URL.createObjectURL(new Blob([data], { type: 'application/pdf' })); const a = document.createElement('a'); a.href = url; a.download = `factura_${r.idAlquiler}.pdf`; document.body.appendChild(a); a.click(); document.body.removeChild(a); setTimeout(() => URL.revokeObjectURL(url), 60_000); } catch (err) { console.error('Error descargando Factura', err); }
-                                }}
-                                className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                              >
-                                Factura PDF
-                              </button>
-                              <button
-                                onClick={async () => {
-                                  setOpenMenuId(null); alert('XML no disponible desde este botón.');
-                                }}
-                                className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                              >
-                                XML
                               </button>
                             </div>
                           </div>

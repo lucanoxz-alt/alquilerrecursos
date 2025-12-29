@@ -13,6 +13,8 @@ import java.util.Map;
 @RequestMapping("/api/comprobantes-pago")
 public class ComprobantePagoController {
 
+    private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(ComprobantePagoController.class);
+
     @Autowired private ComprobantePagoService service;
 
     @GetMapping("/pago/{idPago}/datos")
@@ -27,6 +29,7 @@ public class ComprobantePagoController {
 
     @GetMapping("/pago/{idPago}/pdf")
     public ResponseEntity<byte[]> pdfPorPago(@PathVariable String idPago) {
+        logger.info("Solicitud PDF comprobante por pago: {} (Authorization: {})", idPago, "[omitted]");
         Map<String,Object> data = service.generarDatosComprobantePagoPorPago(idPago);
         byte[] pdf = service.generarPDFDesdeDatos(data);
         HttpHeaders headers = new HttpHeaders();
@@ -37,6 +40,7 @@ public class ComprobantePagoController {
 
     @GetMapping("/alquiler/{idAlquiler}/pdf")
     public ResponseEntity<byte[]> pdfPorAlquiler(@PathVariable String idAlquiler) {
+        logger.info("Solicitud PDF comprobante por alquiler: {} (Authorization: {})", idAlquiler, "[omitted]");
         Map<String,Object> data = service.generarDatosComprobantePagoPorAlquiler(idAlquiler);
         byte[] pdf = service.generarPDFDesdeDatos(data);
         HttpHeaders headers = new HttpHeaders();

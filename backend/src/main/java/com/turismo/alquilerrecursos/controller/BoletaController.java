@@ -5,13 +5,19 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Map;
 
 @RestController
 @RequestMapping("/api/boletas")
 public class BoletaController {
+
+    private static final Logger logger = LoggerFactory.getLogger(BoletaController.class);
 
     @Autowired
     private BoletaService boletaService;
@@ -81,7 +87,8 @@ public class BoletaController {
             headers.set("Content-Disposition", "attachment; filename=\"boleta_" + idAlquiler + ".pdf\"");
             return ResponseEntity.ok().headers(headers).body(pdf);
         } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(("Error generando PDF: " + e.getMessage()).getBytes());
+            logger.error("Error al generar PDF de boleta para {}: {}", idAlquiler, e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(("Error generando PDF: " + e.getMessage()).getBytes());
         }
     }
 }

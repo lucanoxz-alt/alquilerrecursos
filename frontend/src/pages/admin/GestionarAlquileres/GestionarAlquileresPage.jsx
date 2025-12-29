@@ -1,4 +1,4 @@
-// src/pages/admin/GestionarAlquileresPage.jsx
+// src/pages/admin/GestionarAlquileres/GestionarAlquileresPage.jsx
 import React, { useState } from 'react';
 import { Calendar, Plus, X } from 'lucide-react';
 import BusquedaCliente from './components/BusquedaCliente';
@@ -19,21 +19,12 @@ const GestionarAlquileresPage = () => {
   const [showNewClientForm, setShowNewClientForm] = useState(false);
   const [queryBusqueda, setQueryBusqueda] = useState('');
 
+  // Fecha y hora (opcional en Alquileres; se usa en el resumen)
+  const [fechaHoraInicio, setFechaHoraInicio] = useState('');
+
+
   // Recursos seleccionados (cada recurso puede tener horasSolicitadas)
   const [selectedResources, setSelectedResources] = useState([]);
-
-  // Hora de inicio (se combina con la fecha actual al enviar)
-  const getFechaHoraInicioISO = () => {
-    // Usar la fecha y hora actual al registrar el alquiler
-    const now = new Date();
-    const yyyy = now.getFullYear();
-    const MM = String(now.getMonth() + 1).padStart(2, '0');
-    const dd = String(now.getDate()).padStart(2, '0');
-    const HH = String(now.getHours()).padStart(2, '0');
-    const mm = String(now.getMinutes()).padStart(2, '0');
-    const ss = String(now.getSeconds()).padStart(2, '0');
-    return `${yyyy}-${MM}-${dd}T${HH}:${mm}:${ss}`;
-  };
 
   const handleClientSelected = (client) => {
     setSelectedClient(client);
@@ -92,6 +83,7 @@ const GestionarAlquileresPage = () => {
       return;
     }
 
+  
     if (selectedResources.length === 0) {
       alert('Por favor selecciona al menos un recurso');
       return;
@@ -104,7 +96,6 @@ const GestionarAlquileresPage = () => {
           idRecurso: r.idRecurso,
           horasSolicitadas: parseInt(r.horasSolicitadas, 10) || 1,
         })),
-        fechaHoraInicio: getFechaHoraInicioISO(),
         metodoPago: metodoPago,
         idPromocion: promoAplicable?.idPromocion || null,
       };
@@ -117,15 +108,47 @@ const GestionarAlquileresPage = () => {
 
       alert('Alquiler registrado exitosamente');
       console.log('Alquiler creado:', response.data);
+
+      // Generar comprobante de pago (50%)
       if (response?.data?.idAlquiler) {
+        const id = response.data.idAlquiler;
+        const downloadBlob = (blobData, filename) => {
+          const url = URL.createObjectURL(new Blob([blobData], { type: 'application/pdf' }));
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = filename;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          setTimeout(() => URL.revokeObjectURL(url), 60_000);
+        };
+
         try {
-          const { data: html } = await api.get(`/boletas/${response.data.idAlquiler}/html`, { responseType: 'text' });
-          const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
-          const url = URL.createObjectURL(blob);
-          window.open(url, '_blank');
-          setTimeout(() => URL.revokeObjectURL(url), 60000);
-        } catch (e) {
-          alert('Boleta generada, pero no se pudo abrir automáticamente (¿sesión expirada?). Puedes abrirla desde la tabla con Ver boleta.');
+          const { data } = await api.get(`/alquileres/${id}/ticket`, { responseType: 'blob' });
+          downloadBlob(data, `TICKET_${id}.pdf`);
+        } catch (err) {
+          console.warn('Error descargando comprobante automático', err);
+          // Try fallback to boleta PDF
+          try {
+            const { data } = await api.get(`/boletas/${id}/pdf`, { responseType: 'blob' });
+            downloadBlob(data, `BOLETA_${id}.pdf`);
+            alert('Alquiler creado. Se descargó la Boleta como fallback.');
+          } catch (err2) {
+            console.warn('Fallback boleta PDF falló', err2);
+            if ((err?.response && err.response.status === 401) || (err2?.response && err2.response.status === 401)) {
+              alert('Alquiler creado, pero no se pudo descargar el comprobante automáticamente: tu sesión expiró. Puedes generar la boleta desde la lista de alquileres.');
+            } else {
+              // Try Boleta PDF fallback
+              try {
+                const { data } = await api.get(`/boletas/${id}/pdf`, { responseType: 'blob' });
+                downloadBlob(data, `BOLETA_${id}.pdf`);
+                alert('Alquiler creado. Se descargó la Boleta como alternativa.');
+              } catch (err3) {
+                console.error('Todos los intentos de descarga fallaron', err, err2, err3);
+                alert('Alquiler creado, pero no se pudo descargar el comprobante automáticamente. Por favor genera el comprobante desde la lista de alquileres y revisa la consola para más detalles.');
+              }
+            }
+          }
         }
       }
       setActualizarLista((prev) => prev + 1);
@@ -184,15 +207,14 @@ const GestionarAlquileresPage = () => {
               />
             )}
 
-            {/* Seleccionar recursos */}
+            {/* Seleccionar recursos (sin fecha/hora en Alquileres) */}
             <SeleccionRecursos
+              label="Seleccionar recursos"
               selectedResources={selectedResources}
               onResourcesChange={setSelectedResources}
+              fechaInicio={null}
+              duracionHoras={totalHoras || 1}
             />
-
-            {/* Configuración del alquiler eliminada: el tiempo empieza al registrar alquiler */}
-            <div className="hidden">
-            </div>
 
             {/* Método de pago */}
             <SeleccionMetodoPago onSubmit={handleSubmitAlquiler} />
@@ -204,7 +226,7 @@ const GestionarAlquileresPage = () => {
               cliente={selectedClient}
               recursos={selectedResources}
               duracionHoras={totalHoras}
-              fechaInicio={getFechaHoraInicioISO()}
+              fechaInicio={fechaHoraInicio}
               promocionAplicada={promoAplicable && {
                 idPromocion: promoAplicable.idPromocion,
                 nombre: promoAplicable.nombre,

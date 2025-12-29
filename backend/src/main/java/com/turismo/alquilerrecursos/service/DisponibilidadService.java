@@ -57,16 +57,16 @@ public class DisponibilidadService {
         for (Alquiler alquiler : alquileresActivos) {
             // Verificar si este alquiler tiene el recurso en cuestión
             List<DetalleAlquiler> detalles = detalleAlquilerRepository.findByIdAlquiler(alquiler.getIdAlquiler());
-            boolean tieneRecurso = detalles.stream()
-                .anyMatch(detalle -> idRecurso.equals(detalle.getIdRecurso()));
-            
-            if (tieneRecurso) {
-                LocalDateTime inicioAlquiler = alquiler.getFechaHoraInicio();
-                LocalDateTime finAlquiler = alquiler.getFechaHoraFin();
-                
-                // Verificar si hay solapamiento de horarios
-                if (hayConflictoHorario(fechaInicio, fechaFin, inicioAlquiler, finAlquiler)) {
-                    return true;
+            for (DetalleAlquiler detalle : detalles) {
+                if (idRecurso.equals(detalle.getIdRecurso())) {
+                    LocalDateTime inicioRecurso = alquiler.getFechaHoraInicio();
+                    LocalDateTime finRecurso = inicioRecurso != null && detalle.getHorasRealizadas() != null
+                        ? inicioRecurso.plusHours(detalle.getHorasRealizadas())
+                        : alquiler.getFechaHoraFin();
+                    // Verificar si hay solapamiento de horarios por recurso
+                    if (inicioRecurso != null && finRecurso != null && hayConflictoHorario(fechaInicio, fechaFin, inicioRecurso, finRecurso)) {
+                        return true;
+                    }
                 }
             }
         }
@@ -156,5 +156,69 @@ public class DisponibilidadService {
         }
         
         return "Disponible";
+    }
+
+    /**
+     * Devuelve, para todos los recursos, su estado de disponibilidad en el horario solicitado
+     */
+    public List<RecursoDisponibilidad> obtenerDisponibilidadDetallada(LocalDateTime fechaInicio, int duracionHoras) {
+        LocalDateTime fechaFin = fechaInicio.plusHours(duracionHoras);
+        List<Recurso> todos = recursoRepository.findAll();
+        return todos.stream().map(r -> {
+            boolean baseDisponible = "Disponible".equalsIgnoreCase(String.valueOf(r.getEstado()));
+            boolean disponibleTiempo = baseDisponible && !verificarConflictoAlquileres(r.getIdRecurso(), fechaInicio, fechaFin)
+                    && !verificarConflictoReservas(r.getIdRecurso(), fechaInicio, fechaFin);
+            LocalDateTime horaDisponible = null;
+            if (!disponibleTiempo) {
+                horaDisponible = calcularHoraDisponibleSiguiente(r.getIdRecurso(), fechaInicio, fechaFin);
+            }
+            String estadoDisp = disponibleTiempo ? "Disponible" : (baseDisponible ? "No Disponible" : r.getEstado());
+            return new RecursoDisponibilidad(r, estadoDisp, horaDisponible);
+        }).collect(Collectors.toList());
+    }
+
+    private LocalDateTime calcularHoraDisponibleSiguiente(String idRecurso, LocalDateTime fechaInicio, LocalDateTime fechaFin) {
+        LocalDateTime candidate = null;
+        // Alquileres activos
+        for (Alquiler a : alquilerRepository.findByEstadoalquiler("Activo")) {
+            List<DetalleAlquiler> detalles = detalleAlquilerRepository.findByIdAlquiler(a.getIdAlquiler());
+            for (DetalleAlquiler d : detalles) {
+                if (idRecurso.equals(d.getIdRecurso())) {
+                    LocalDateTime ini = a.getFechaHoraInicio();
+                    LocalDateTime fin = ini != null && d.getHorasRealizadas() != null ? ini.plusHours(d.getHorasRealizadas()) : a.getFechaHoraFin();
+                    if (ini != null && fin != null && hayConflictoHorario(fechaInicio, fechaFin, ini, fin)) {
+                        if (candidate == null || fin.isAfter(candidate)) candidate = fin;
+                    }
+                }
+            }
+        }
+        // Reservas pendientes
+        for (Reserva r : reservaRepository.findByEstadoreserva("Pendiente")) {
+            for (DetalleReserva d : detalleReservaRepository.findByIdReserva(r.getIdReserva())) {
+                if (idRecurso.equals(d.getIdRecurso())) {
+                    LocalDateTime ini = r.getFechaHoraInicioPrevista();
+                    LocalDateTime fin = ini != null ? ini.plusHours(d.getHorasSolicitadas()) : null;
+                    if (ini != null && fin != null && hayConflictoHorario(fechaInicio, fechaFin, ini, fin)) {
+                        if (candidate == null || fin.isAfter(candidate)) candidate = fin;
+                    }
+                }
+            }
+        }
+        return candidate;
+    }
+
+    public static class RecursoDisponibilidad {
+        private final Recurso recurso;
+        private final String estadoDisponibilidad;
+        private final LocalDateTime horaDisponible;
+
+        public RecursoDisponibilidad(Recurso recurso, String estadoDisponibilidad, LocalDateTime horaDisponible) {
+            this.recurso = recurso;
+            this.estadoDisponibilidad = estadoDisponibilidad;
+            this.horaDisponible = horaDisponible;
+        }
+        public Recurso getRecurso() { return recurso; }
+        public String getEstadoDisponibilidad() { return estadoDisponibilidad; }
+        public LocalDateTime getHoraDisponible() { return horaDisponible; }
     }
 }
