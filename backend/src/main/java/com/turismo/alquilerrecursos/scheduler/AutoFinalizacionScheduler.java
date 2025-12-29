@@ -29,7 +29,6 @@ public class AutoFinalizacionScheduler {
         for (Alquiler a : activos) {
             List<DetalleAlquiler> detalles = detalleAlquilerRepository.findByIdAlquiler(a.getIdAlquiler());
             boolean todosVencidos = true;
-            List<DetalleAlquiler> detalles = detalleAlquilerRepository.findByIdAlquiler(a.getIdAlquiler());
             for (DetalleAlquiler d : detalles) {
                 LocalDateTime ini = a.getFechaHoraInicio();
                 LocalDateTime finDetalle = (ini != null && d.getHorasRealizadas() != null) ? ini.plusHours(d.getHorasRealizadas()) : a.getFechaHoraFin();
