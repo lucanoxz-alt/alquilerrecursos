@@ -4,7 +4,9 @@ import com.turismo.alquilerrecursos.service.ReporteService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.security.access.prepost.PreAuthorize;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Map;
 
@@ -97,6 +99,22 @@ public class ReporteController {
     }
 
     /**
+     * Resumen diario por usuario (gestor)
+     * - Administradores y Jefes pueden solicitar para cualquier gestor
+     * - Empleados solo pueden solicitar su propio resumen (enforced via UsuarioSecurity.isSelf)
+     */
+    @GetMapping("/diario-usuario")
+    @PreAuthorize("hasAnyRole('ADMINISTRADOR','JEFE') or @usuarioSecurity.isSelf(#idUsuarioGestor)")
+    public ResponseEntity<Map<String, Object>> obtenerResumenDiarioPorUsuario(
+            @RequestParam String idUsuarioGestor,
+            @RequestParam(required = false) String fecha) {
+
+        LocalDate dia = (fecha != null) ? LocalDate.parse(fecha) : LocalDate.now();
+        Map<String, Object> resumen = reporteService.obtenerResumenDiarioPorUsuario(idUsuarioGestor, dia);
+        return ResponseEntity.ok(resumen);
+    }
+
+    /**
      * Reporte financiero detallado
      */
     @GetMapping("/financiero")
@@ -105,5 +123,44 @@ public class ReporteController {
         
         Map<String, Object> reporteFinanciero = reporteService.obtenerReporteFinanciero(periodo);
         return ResponseEntity.ok(reporteFinanciero);
+    }
+
+    /**
+     * Caja diaria (cuadre de caja)
+     */
+    @GetMapping("/caja-diaria")
+    public ResponseEntity<Map<String, Object>> obtenerCajaDiaria(
+            @RequestParam(required = false) String fecha,
+            @RequestParam(required = false) String idUsuarioGestor) {
+        java.time.LocalDate dia = (fecha != null && !fecha.isBlank()) ? java.time.LocalDate.parse(fecha) : java.time.LocalDate.now();
+        Map<String, Object> data = reporteService.obtenerCajaDiaria(dia, idUsuarioGestor);
+        return ResponseEntity.ok(data);
+    }
+
+    /**
+     * Ingresos por medio de pago en un rango
+     */
+    @GetMapping("/ingresos-por-medio")
+    public ResponseEntity<Map<String, Object>> obtenerIngresosPorMedio(
+            @RequestParam(required = false) String fechaInicio,
+            @RequestParam(required = false) String fechaFin) {
+        java.time.LocalDateTime inicio = fechaInicio != null ? java.time.LocalDateTime.parse(fechaInicio) : null;
+        java.time.LocalDateTime fin = fechaFin != null ? java.time.LocalDateTime.parse(fechaFin) : null;
+        Map<String, Object> data = reporteService.obtenerIngresosPorMedio(inicio, fin);
+        return ResponseEntity.ok(data);
+    }
+
+    /**
+     * Alquileres por usuario gestor en un rango
+     */
+    @GetMapping("/alquileres-por-usuario")
+    public ResponseEntity<Map<String, Object>> obtenerAlquileresPorUsuario(
+            @RequestParam String idUsuarioGestor,
+            @RequestParam(required = false) String fechaInicio,
+            @RequestParam(required = false) String fechaFin) {
+        java.time.LocalDateTime inicio = fechaInicio != null ? java.time.LocalDateTime.parse(fechaInicio) : null;
+        java.time.LocalDateTime fin = fechaFin != null ? java.time.LocalDateTime.parse(fechaFin) : null;
+        Map<String, Object> data = reporteService.obtenerAlquileresPorUsuario(inicio, fin, idUsuarioGestor);
+        return ResponseEntity.ok(data);
     }
 }

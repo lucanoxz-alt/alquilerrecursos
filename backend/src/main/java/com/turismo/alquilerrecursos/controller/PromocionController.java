@@ -5,6 +5,7 @@ import com.turismo.alquilerrecursos.service.PromocionService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.security.access.prepost.PreAuthorize;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -49,6 +50,7 @@ public class PromocionController {
      * Crear nueva promoción
      */
     @PostMapping
+    @PreAuthorize("hasAnyRole('ADMINISTRADOR','JEFE')")
     public ResponseEntity<?> crearPromocion(@RequestBody Promocion promocion) {
         try {
             Promocion nuevaPromocion = promocionService.crearPromocion(promocion);
@@ -62,6 +64,7 @@ public class PromocionController {
      * Actualizar promoción existente
      */
     @PutMapping("/{idPromocion}")
+    @PreAuthorize("hasAnyRole('ADMINISTRADOR','JEFE')")
     public ResponseEntity<?> actualizarPromocion(
             @PathVariable String idPromocion,
             @RequestBody Promocion promocion) {
@@ -77,6 +80,7 @@ public class PromocionController {
      * Eliminar promoción
      */
     @DeleteMapping("/{idPromocion}")
+    @PreAuthorize("hasAnyRole('ADMINISTRADOR','JEFE')")
     public ResponseEntity<?> eliminarPromocion(@PathVariable String idPromocion) {
         boolean eliminado = promocionService.eliminarPromocion(idPromocion);
         if (eliminado) {
@@ -90,6 +94,7 @@ public class PromocionController {
      * Activar/Desactivar promoción
      */
     @PutMapping("/{idPromocion}/toggle")
+    @PreAuthorize("hasAnyRole('ADMINISTRADOR','JEFE')")
     public ResponseEntity<?> toggleEstadoPromocion(@PathVariable String idPromocion) {
         try {
             Promocion promocion = promocionService.toggleEstadoPromocion(idPromocion);

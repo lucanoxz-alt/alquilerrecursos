@@ -1,6 +1,6 @@
 // src/pages/MainDashboard.jsx
 import React, { useState } from 'react';
-import Sidebar from "../../components/layout/Sidebar";
+import AdminSidebar from "../admin/AdminSidebar";
 import Dashboard from "../../components/Dashboard";
 import GestionarAlquileresPage from "../admin/GestionarAlquileres/GestionarAlquileresPage";
 
@@ -52,11 +52,7 @@ const MainDashboard = ({ onLogout }) => {
 
   return (
     <div className="flex min-h-screen bg-gray-50">
-      <Sidebar
-        activeTab={activeTab}
-        setActiveTab={setActiveTab}
-        onLogout={onLogout}
-      />
+      <AdminSidebar user={{ rol: 'ADMINISTRADOR' }} onLogout={onLogout} />
       {renderContent()}
     </div>
   );

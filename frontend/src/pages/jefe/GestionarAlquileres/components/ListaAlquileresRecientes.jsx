@@ -210,9 +210,12 @@ const cargar = async () => {
                   <td className="py-3 px-4 text-gray-900 font-medium">{r.idAlquiler}</td>
                   <td className="py-3 px-4 text-gray-700">{getClienteNombre(r) || '—'}</td>
                   <td className="py-3 px-4 text-gray-700 max-w-md truncate">
-                    {Array.isArray(r.nombresRecursos) && r.nombresRecursos.length > 0
-                      ? r.nombresRecursos.length
-                      : (r.detalles || []).length}
+                    {(() => {
+                      const nombresCount = Array.isArray(r.nombresRecursos) ? r.nombresRecursos.length : 0;
+                      const detallesCount = Array.isArray(r.detalles) ? r.detalles.length : 0;
+                      const count = nombresCount || detallesCount || 1;
+                      return count;
+                    })()}
                   </td>
                   <td className="py-3 px-4 text-gray-700 whitespace-nowrap">{(() => { const d = parseLocalLima(r.fechaHoraInicio); return d ? d.toLocaleString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'America/Lima' }) : ''; })()}</td>
                   <td className="py-3 px-4 text-gray-900 font-medium">S/. {typeof r.costoTotal === 'number' ? r.costoTotal.toFixed(2) : r.costoTotal}</td>
@@ -225,10 +228,10 @@ const cargar = async () => {
                         onClick={async () => {
                           const id = r.idAlquiler;
                           try {
-                            const { data } = await api.get(`/alquileres/${id}/ticket`, { responseType: 'blob', headers: { /* evitar bearer */ } });
-                            const url = URL.createObjectURL(new Blob([data], { type: 'application/pdf' }));
-                            window.open(url, '_blank');
-                            setTimeout(() => URL.revokeObjectURL(url), 60_000);
+                            const { data } = await api.get(`/alquileres/${id}/ticket`, { responseType: 'blob' });
+                          const url = URL.createObjectURL(new Blob([data], { type: 'application/pdf' }));
+                          window.open(url, '_blank');
+                          setTimeout(() => URL.revokeObjectURL(url), 60_000);
                           } catch (err) {
                             console.warn('Error al abrir boleta (PDF)', err);
                             const status = err?.response?.status;

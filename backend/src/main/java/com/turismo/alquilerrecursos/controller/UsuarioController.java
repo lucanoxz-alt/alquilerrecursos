@@ -86,6 +86,9 @@ public class UsuarioController {
                 .map(usuarioExistente -> {
                     if (usuario.getNombre() != null) usuarioExistente.setNombre(usuario.getNombre());
                     if (usuario.getApellidos() != null) usuarioExistente.setApellidos(usuario.getApellidos());
+                    if (usuario.getTelefono() != null) {
+                        usuarioExistente.setTelefono(usuario.getTelefono());
+                    }
                     if (usuario.getEmail() != null) {
                         if (!usuario.getEmail().equals(usuarioExistente.getEmail()) && usuarioRepository.existsByEmail(usuario.getEmail())) {
                             return ResponseEntity.badRequest().body("El email ya está en uso");

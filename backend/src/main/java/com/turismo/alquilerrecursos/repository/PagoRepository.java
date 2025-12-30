@@ -28,4 +28,7 @@ public interface PagoRepository extends JpaRepository<Pago, String> {
      */
     @Query("SELECT p FROM Pago p WHERE p.fechaEmision BETWEEN :fechaInicio AND :fechaFin")
     List<Pago> findPagosBetweenDates(@Param("fechaInicio") LocalDateTime fechaInicio, @Param("fechaFin") LocalDateTime fechaFin);
+
+    @Query("SELECT p FROM Pago p JOIN Alquiler a ON p.idAlquiler = a.idAlquiler WHERE a.idUsuarioGestor = :idUsuarioGestor AND p.fechaEmision BETWEEN :fechaInicio AND :fechaFin")
+    List<Pago> findPagosByUsuarioGestorAndDateRange(@Param("idUsuarioGestor") String idUsuarioGestor, @Param("fechaInicio") LocalDateTime fechaInicio, @Param("fechaFin") LocalDateTime fechaFin);
 }

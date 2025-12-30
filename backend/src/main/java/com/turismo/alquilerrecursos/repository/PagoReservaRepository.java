@@ -13,4 +13,9 @@ public interface PagoReservaRepository extends JpaRepository<PagoReserva, String
      * Buscar pagos de reserva por ID de reserva
      */
     List<PagoReserva> findByIdReserva(String idReserva);
+
+    /**
+     * Pagos de reserva entre fechas
+     */
+    java.util.List<PagoReserva> findByFechaPagoBetween(java.time.LocalDateTime inicio, java.time.LocalDateTime fin);
 }

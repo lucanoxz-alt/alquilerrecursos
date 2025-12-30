@@ -1,60 +1,69 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { X } from 'lucide-react';
 
-const FormularioNuevaPromocion = ({ onSubmit, onCancel }) => {
+const FormularioPromocion = ({ promocion, onSubmit, onCancel }) => {
   const [formData, setFormData] = useState({
     nombre: '',
     descripcion: '',
     porcentajeDesc: '',
     condicionMinima: 1,
-    activa: true,
+    activa: true
   });
+
   const [loading, setLoading] = useState(false);
 
-  const handleChange = (field, value) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
-  };
+  // Cargar datos si estamos editando
+  useEffect(() => {
+    if (promocion) {
+      setFormData({
+        nombre: promocion.nombre || '',
+        descripcion: promocion.descripcion || '',
+        porcentajeDesc: promocion.porcentajeDesc !== undefined && promocion.porcentajeDesc !== null ? String(promocion.porcentajeDesc) : '',
+        condicionMinima: promocion.condicionMinima ?? 1,
+        activa: promocion.activa !== undefined ? promocion.activa : true
+      });
+    }
+  }, [promocion]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-
-    // Validaciones básicas
+    
+    // Validaciones
     if (!formData.nombre.trim()) {
       alert('El nombre es obligatorio');
       return;
     }
+    
     if (!formData.descripcion.trim()) {
       alert('La descripción es obligatoria');
       return;
     }
-
-    let porcentaje = parseFloat(formData.porcentajeDesc);
+    
+    const porcentaje = parseFloat(formData.porcentajeDesc);
     if (isNaN(porcentaje) || porcentaje <= 0 || porcentaje > 100) {
       alert('El porcentaje debe ser un número entre 1 y 100');
-      return;
-    }
-    // Redondear a 2 decimales para compatibilidad con BigDecimal(scale=2)
-    porcentaje = Math.round(porcentaje * 100) / 100;
-
-    const condicion = parseInt(formData.condicionMinima, 10);
-    if (isNaN(condicion) || condicion < 1) {
-      alert('La condición mínima debe ser un entero mayor o igual a 1');
       return;
     }
 
     setLoading(true);
     try {
       await onSubmit({
-        nombre: formData.nombre.trim(),
-        descripcion: formData.descripcion.trim(),
+        ...formData,
         porcentajeDesc: porcentaje,
-        condicionMinima: condicion,
-        activa: !!formData.activa,
+        condicionMinima: parseInt(formData.condicionMinima || 1, 10)
       });
     } catch (error) {
-      // El padre maneja el error
+      // El error se maneja en la función padre
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleChange = (field, value) => {
+    setFormData(prev => ({
+      ...prev,
+      [field]: value
+    }));
   };
 
   return (
@@ -107,10 +116,10 @@ const FormularioNuevaPromocion = ({ onSubmit, onCancel }) => {
         />
       </div>
 
-      {/* Condición mínima */}
+      {/* Condición Mínima */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">
-          Condición mínima (ej. cantidad mínima para aplicar)
+          Condición mínima (unidades)
         </label>
         <input
           type="number"
@@ -118,7 +127,7 @@ const FormularioNuevaPromocion = ({ onSubmit, onCancel }) => {
           step="1"
           value={formData.condicionMinima}
           onChange={(e) => handleChange('condicionMinima', e.target.value)}
-          placeholder="Ej: 2"
+          placeholder="Ej: 1"
           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
           disabled={loading}
         />
@@ -154,11 +163,11 @@ const FormularioNuevaPromocion = ({ onSubmit, onCancel }) => {
           disabled={loading}
           className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
         >
-          {loading ? 'Guardando...' : 'Crear'}
+          {loading ? 'Guardando...' : promocion ? 'Actualizar' : 'Crear'}
         </button>
       </div>
     </form>
   );
 };
 
-export default FormularioNuevaPromocion;
+export default FormularioPromocion;
