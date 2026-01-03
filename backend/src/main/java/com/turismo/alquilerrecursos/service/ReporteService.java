@@ -25,11 +25,11 @@ public class ReporteService {
     @Autowired
     private DetalleAlquilerRepository detalleAlquilerRepository;
     @Autowired
+    private PagoRepository pagoRepository;
+    @Autowired
     private DetalleReservaRepository detalleReservaRepository;
     @Autowired
     private PagoReservaRepository pagoReservaRepository;
-    @Autowired
-    private PagoRepository pagoRepository;
 
     /**
      * Dashboard con métricas generales
@@ -641,6 +641,58 @@ public class ReporteService {
             .filter(a -> a.getFechaHoraInicio().isAfter(inicioMes) && a.getFechaHoraInicio().isBefore(finMes))
             .map(Alquiler::getCostoTotal)
             .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    public Map<String,Object> obtenerMoras(java.time.LocalDateTime inicio, java.time.LocalDateTime fin, String idAlquiler) {
+        List<DetalleAlquiler> detalles = detalleAlquilerRepository.findAll();
+        java.util.stream.Stream<DetalleAlquiler> stream = detalles.stream()
+            .filter(d -> d.getMoraAplicada() != null && d.getMoraAplicada().compareTo(java.math.BigDecimal.ZERO) > 0);
+        if (inicio != null) stream = stream.filter(d -> d.getFechaDevolucionReal() != null && !d.getFechaDevolucionReal().isBefore(inicio));
+        if (fin != null) stream = stream.filter(d -> d.getFechaDevolucionReal() != null && !d.getFechaDevolucionReal().isAfter(fin));
+        if (idAlquiler != null && !idAlquiler.isBlank()) stream = stream.filter(d -> idAlquiler.equals(d.getIdAlquiler()));
+        List<DetalleAlquiler> filtrados = stream.collect(java.util.stream.Collectors.toList());
+
+        List<Map<String,Object>> items = new java.util.ArrayList<>();
+        List<Pago> pagos = pagoRepository.findAll();
+        for (DetalleAlquiler d : filtrados) {
+            Recurso r = recursoRepository.findById(d.getIdRecurso()).orElse(null);
+            Alquiler a = alquilerRepository.findById(d.getIdAlquiler()).orElse(null);
+            java.time.LocalDateTime horaTeorica = (a != null) ? a.getFechaHoraInicio().plusHours(a.getDuracionHoras()) : null;
+            Long minutosExtra = null;
+            if (horaTeorica != null && d.getFechaDevolucionReal() != null) {
+                long diff = java.time.Duration.between(horaTeorica, d.getFechaDevolucionReal()).toMinutes();
+                long extra = Math.max(0, diff);
+                if (extra <= 5) extra = 0; else extra = extra - 5;
+                minutosExtra = extra;
+            }
+            String pref = "MORA-" + d.getIdAlquiler() + "-";
+            String boleta = pagos.stream()
+                    .filter(p -> d.getIdAlquiler().equals(p.getIdAlquiler()))
+                    .filter(p -> p.getNumBoleta() != null && p.getNumBoleta().startsWith(pref))
+                    .filter(p -> p.getMontoPagado() != null && p.getMontoPagado().compareTo(d.getMoraAplicada()) == 0)
+                    .map(Pago::getNumBoleta)
+                    .findFirst().orElse(null);
+            java.util.Map<String,Object> row = new java.util.HashMap<>();
+            row.put("idAlquiler", d.getIdAlquiler());
+            row.put("idDetalle", d.getIdDetalle());
+            row.put("idRecurso", d.getIdRecurso());
+            row.put("nombreRecurso", r != null ? r.getNombre() : d.getIdRecurso());
+            row.put("fechaDevolucionReal", d.getFechaDevolucionReal());
+            row.put("minutosExtra", minutosExtra);
+            row.put("moraAplicada", d.getMoraAplicada());
+            row.put("numBoletaMora", boleta);
+            items.add(row);
+        }
+        java.math.BigDecimal total = items.stream()
+                .map(m -> (java.math.BigDecimal)m.get("moraAplicada"))
+                .reduce(java.math.BigDecimal.ZERO, java.math.BigDecimal::add);
+        java.util.Map<String,Object> out = new java.util.HashMap<>();
+        out.put("items", items);
+        out.put("totales", java.util.Map.of(
+                "cantidad", items.size(),
+                "totalMoras", total
+        ));
+        return out;
     }
 
     private BigDecimal calcularIngresosPorRecurso(String idRecurso) {

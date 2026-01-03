@@ -237,16 +237,17 @@ const cargarDisponibilidad = async () => {
           <div className="border border-gray-200 rounded-lg max-h-96 overflow-y-auto">
             {filteredRecursos.length > 0 ? (
               <div className="divide-y divide-gray-100">
-                {filteredRecursos.map((recurso) => { const det = detalleDisponibilidad.find(x => x.recurso?.idRecurso === recurso.idRecurso) || {}; const disponible = (det.estadoDisponibilidad || '').toLowerCase() === 'disponible';
+                {filteredRecursos.map((recurso) => { const det = detalleDisponibilidad.find(x => x.recurso?.idRecurso === recurso.idRecurso) || {};
                   const isSelected = selectedResources.some(r => r.idRecurso === recurso.idRecurso);
                   const estadoRecurso = (recurso.estado || '').toString().toLowerCase();
                   const permitidoPorEstado = estadoRecurso === 'disponible';
                   const disponiblePorTiempo = !availableSet || availableSet.has(recurso.idRecurso);
-                  const isDisponible = permitidoPorEstado && disponiblePorTiempo && disponible;
+                  const disponible = disponiblePorTiempo; // usado para etiqueta de disponibilidad
+                  const isDisponible = permitidoPorEstado && disponiblePorTiempo;
                   return (
                     <div key={recurso.idRecurso} className={`p-4 transition-colors ${isSelected ? 'bg-blue-50 border-l-4 border-l-blue-500' : 'hover:bg-gray-50'} ${!isDisponible ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`} onClick={() => isDisponible && handleResourceToggle(recurso)}>
                       <div className="flex items-center space-x-3">
-                        <input type="checkbox" checked={isSelected} onChange={() => {}} className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded" />
+                        <input type="checkbox" checked={isSelected} onChange={() => {}} disabled={!isDisponible} className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded disabled:opacity-50" />
                         <div className="flex-1">
                           <div className="flex items-center justify-between">
                             <div className="flex-1">
@@ -269,7 +270,10 @@ const cargarDisponibilidad = async () => {
                                   const min = Math.round(diffMs / 60000);
                                   const h = Math.floor(min / 60);
                                   const m = min % 60;
-                                  return `⛔ Disponible a las ${hora.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} (${h > 0 ? h + 'h ' : ''}${m}min)`;
+                                  // Etiqueta específica según conflicto
+                                  const baseEstado = (det.estadoDisponibilidad || '').toLowerCase();
+                                  const conflict = baseEstado.includes('reserv') ? 'Reservado' : (baseEstado.includes('alquil') ? 'Alquilado' : 'No disponible');
+                                  return `⛔ ${conflict} hasta ${hora.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} (${h > 0 ? h + 'h ' : ''}${m}min)`;
                                 })()}
                               </div>
                             </div>
@@ -335,7 +339,10 @@ const cargarDisponibilidad = async () => {
   // Vista completa siempre en Reservas (sin frecuentes)
   return (
     <div className="space-y-4">
-      <label className="block text-sm font-medium text-gray-700">{label} <span className="text-red-500">*</span></label>
+      <div className="flex items-center justify-between">
+        <label className="block text-sm font-medium text-gray-700">{label} <span className="text-red-500">*</span></label>
+        <div className="text-xs text-gray-600">Seleccionados: <span className="font-semibold">{selectedResources.length}</span></div>
+      </div>
 
       {/* Texto guía solo en Reservas */}
       {(!fechaInicio || !duracionHoras) && (

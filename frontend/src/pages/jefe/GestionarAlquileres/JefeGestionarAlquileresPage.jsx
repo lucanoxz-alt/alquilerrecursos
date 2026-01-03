@@ -35,11 +35,20 @@ const JefeGestionarAlquileresPage = ({ user, modo }) => {
   }, []);
 
   useEffect(() => {
-    if (!Array.isArray(promosActivas) || promosActivas.length === 0 || totalHoras <= 0) {
+    // Regla de negocio: la promo depende de horas de alquiler contratadas (duración global), no de cantidad de recursos.
+    // Preferimos duracionHoras si existe; si no, usamos totalHoras como respaldo.
+    const horasCandidatas = Number.isFinite(Number(totalHoras)) ? Number(totalHoras) : 0;
+    const tieneRecursos = Array.isArray(selectedResources) && selectedResources.length > 0;
+    if (!Array.isArray(promosActivas) || promosActivas.length === 0 || horasCandidatas <= 0 || !tieneRecursos) {
       setPromoAplicable(null);
       return;
     }
-    const elegibles = promosActivas.filter(p => (p.activa !== false) && (parseInt(p.condicionMinima, 10) || 0) <= totalHoras);
+    const elegibles = promosActivas.filter(p => {
+      const activa = p.activa !== false;
+      const condNum = Number.parseInt((String(p.condicionMinima ?? '').match(/\d+/)?.[0] || '0'), 10);
+      const condicionValida = Number.isInteger(condNum) && condNum >= 1;
+      return activa && condicionValida && horasCandidatas >= condNum;
+    });
     if (elegibles.length === 0) {
       setPromoAplicable(null);
       return;
@@ -50,7 +59,7 @@ const JefeGestionarAlquileresPage = ({ user, modo }) => {
       return pct > bestPct ? p : best;
     }, null);
     setPromoAplicable(mejor);
-  }, [promosActivas, totalHoras]);
+  }, [promosActivas, totalHoras, selectedResources]);
 
   const handleClientSelected = (client) => {
     setSelectedClient(client);
@@ -173,7 +182,8 @@ const JefeGestionarAlquileresPage = ({ user, modo }) => {
               promocionAplicada={promoAplicable && {
                 idPromocion: promoAplicable.idPromocion,
                 nombre: promoAplicable.nombre,
-                porcentajeDescuento: parseFloat(promoAplicable.porcentajeDesc || promoAplicable.porcentajeDescuento || 0)
+                porcentajeDescuento: parseFloat(promoAplicable.porcentajeDesc || promoAplicable.porcentajeDescuento || 0),
+                condicionMinimaNum: parseInt(String(promoAplicable.condicionMinima ?? '').match(/\d+/)?.[0] || '0', 10)
               }}
             />
           </div>

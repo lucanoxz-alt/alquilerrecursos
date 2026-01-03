@@ -32,6 +32,10 @@ public class ComprobantePagoReservaService {
         );
         DateTimeFormatter df = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss");
         BigDecimal total = pr.getMontoPago();
+        java.math.BigDecimal rate = empresaProperties.getIgvRate() != null ? empresaProperties.getIgvRate() : new java.math.BigDecimal("0.18");
+        java.math.BigDecimal divisor = java.math.BigDecimal.ONE.add(rate);
+        BigDecimal gravadas = total.divide(divisor, 2, java.math.RoundingMode.HALF_UP);
+        BigDecimal igv = total.subtract(gravadas);
         Map<String,Object> data = new HashMap<>();
         data.put("empresa", empresa);
         data.put("reserva", r);
@@ -42,6 +46,8 @@ public class ComprobantePagoReservaService {
             "idReserva", pr.getIdReserva()
         ));
         data.put("resumen", Map.of(
+            "gravadas", gravadas,
+            "igv", igv,
             "total", total,
             "enLetras", NumeroALetrasUtil.aMonedaPeru(total)
         ));
@@ -62,7 +68,6 @@ public class ComprobantePagoReservaService {
         return datosDesdePagoReserva(pr);
     }
 
-    public String generarHTML(Map<String,Object> data) {
         Map empresa = (Map) data.get("empresa");
         Map pago = (Map) data.get("pago");
         Reserva r = (Reserva) data.get("reserva");
@@ -84,7 +89,9 @@ public class ComprobantePagoReservaService {
         html.append("<div><strong>Método:</strong> ").append(pago.get("metodo")).append("</div>");
         html.append("</div></div>");
         html.append("<table style='margin-top:12px'><tbody>");
-        html.append("<tr><td>Importe pagado</td><td style='text-align:right'>").append(resumen.get("total")).append("</td></tr>");
+        html.append("<tr><td>Operación gravada</td><td style='text-align:right'>").append(resumen.get("gravadas")).append("</td></tr>");
+        html.append("<tr><td>IGV (18%)</td><td style='text-align:right'>").append(resumen.get("igv")).append("</td></tr>");
+        html.append("<tr><th>Total a pagar</th><th style='text-align:right'>").append(resumen.get("total")).append("</th></tr>");
         html.append("</tbody></table>");
         html.append("<div style='margin-top:12px'>Son: ").append(resumen.get("enLetras")).append("</div>");
         html.append("<div class='row' style='margin-top:20px'><div><img src='").append(qr).append("' width='120' height='120'/></div><div style='text-align:right'><div>HASH: ").append(hash).append("</div></div></div>");
@@ -93,16 +100,51 @@ public class ComprobantePagoReservaService {
     }
 
     public byte[] generarPDF(Map<String,Object> data) {
-        String html = generarHTML(data);
         try (java.io.ByteArrayOutputStream os = new java.io.ByteArrayOutputStream()) {
-            com.openhtmltopdf.pdfboxout.PdfRendererBuilder builder = new com.openhtmltopdf.pdfboxout.PdfRendererBuilder();
-            builder.useFastMode();
-            builder.withHtmlContent(html, null);
-            builder.toStream(os);
-            builder.run();
+            com.itextpdf.kernel.pdf.PdfWriter writer = new com.itextpdf.kernel.pdf.PdfWriter(os);
+            com.itextpdf.kernel.pdf.PdfDocument pdf = new com.itextpdf.kernel.pdf.PdfDocument(writer);
+            com.itextpdf.layout.Document doc = new com.itextpdf.layout.Document(pdf);
+
+            Map empresa = (Map) data.get("empresa");
+            Map pago = (Map) data.get("pago");
+            Map resumen = (Map) data.get("resumen");
+
+            doc.add(new com.itextpdf.layout.element.Paragraph(String.valueOf(empresa.get("nombre"))).setBold().setFontSize(14));
+            doc.add(new com.itextpdf.layout.element.Paragraph("RUC " + String.valueOf(empresa.get("ruc"))));
+            doc.add(new com.itextpdf.layout.element.Paragraph(String.valueOf(empresa.get("direccion"))));
+            doc.add(new com.itextpdf.layout.element.Paragraph(" "));
+            doc.add(new com.itextpdf.layout.element.Paragraph("COMPROBANTE DE PAGO RESERVA").setBold());
+            doc.add(new com.itextpdf.layout.element.Paragraph("N° " + String.valueOf(pago.get("num"))));
+            doc.add(new com.itextpdf.layout.element.Paragraph("Reserva: " + String.valueOf(pago.get("idReserva"))));
+            doc.add(new com.itextpdf.layout.element.Paragraph("Fecha emisión: " + String.valueOf(pago.get("fecha"))));
+            doc.add(new com.itextpdf.layout.element.Paragraph("Método: " + String.valueOf(pago.get("metodo"))));
+
+            com.itextpdf.layout.element.Table tot = new com.itextpdf.layout.element.Table(new float[]{4,2});
+            tot.setWidthPercent(60).setHorizontalAlignment(com.itextpdf.layout.property.HorizontalAlignment.RIGHT);
+            tot.addCell("Operación gravada"); tot.addCell(String.valueOf(resumen.get("gravadas")));
+            tot.addCell("IGV (" + empresaProperties.getIgvRate().movePointRight(2) + "%)"); tot.addCell(String.valueOf(resumen.get("igv")));
+            tot.addCell(new com.itextpdf.layout.element.Cell().add(new com.itextpdf.layout.element.Paragraph("Total a pagar").setBold()));
+            tot.addCell(new com.itextpdf.layout.element.Cell().add(new com.itextpdf.layout.element.Paragraph(String.valueOf(resumen.get("total"))).setBold()));
+            doc.add(new com.itextpdf.layout.element.Paragraph(" "));
+            doc.add(tot);
+            doc.add(new com.itextpdf.layout.element.Paragraph("Son: " + String.valueOf(resumen.get("enLetras"))));
+
+            try {
+                String qrDataUri = (String) data.get("qr");
+                if (qrDataUri != null && qrDataUri.startsWith("data:image")) {
+                    String base64 = qrDataUri.substring(qrDataUri.indexOf(",")+1);
+                    byte[] bytes = java.util.Base64.getDecoder().decode(base64);
+                    com.itextpdf.layout.element.Image img = new com.itextpdf.layout.element.Image(com.itextpdf.io.image.ImageDataFactory.create(bytes));
+                    img.setWidth(120); img.setHeight(120);
+                    doc.add(img);
+                }
+            } catch (Exception ignore) {}
+            if (data.get("hash") != null) doc.add(new com.itextpdf.layout.element.Paragraph("HASH: " + String.valueOf(data.get("hash"))).setFontSize(9));
+
+            doc.close();
             return os.toByteArray();
         } catch (Exception e) {
-            throw new RuntimeException("Error generando PDF de pago reserva", e);
+            throw new RuntimeException("Error generando PDF de pago reserva (iText)", e);
         }
     }
 }

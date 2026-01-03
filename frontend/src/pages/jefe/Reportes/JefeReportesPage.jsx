@@ -33,6 +33,9 @@ const JefeReportesPage = ({ user = {} }) => {
   const [reporteData, setReporteData] = useState(null);
   const [gestores, setGestores] = useState([]);
   const [gestorId, setGestorId] = useState('');
+  const [idTurista, setIdTurista] = useState('');
+  const [idRecurso, setIdRecurso] = useState('');
+  const [applyCounter, setApplyCounter] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -48,7 +51,7 @@ const JefeReportesPage = ({ user = {} }) => {
       }
     })();
   }, []);
-  useEffect(() => { if (reportType !== 'dashboard') { cargarReporte(reportType); } }, [reportType, dateRange]);
+  useEffect(() => { if (reportType !== 'dashboard') { cargarReporte(reportType); } }, [reportType, applyCounter]);
 
   const cargarDashboard = async () => {
     const defaultData = {
@@ -96,6 +99,9 @@ const JefeReportesPage = ({ user = {} }) => {
         // para caja diaria usamos solo 'fecha' (si no hay, hoy) y opcional gestor
         params.fecha = dateRange.from || new Date().toISOString().slice(0,10);
         if (gestorId) params.idUsuarioGestor = gestorId;
+      } else if (tipo === 'quien-alquilo-que') {
+        if (idTurista) params.idTurista = idTurista;
+        if (idRecurso) params.idRecurso = idRecurso;
       } else {
         if (dateRange.from) params.fechaInicio = dateRange.from + 'T00:00:00';
         if (dateRange.to) params.fechaFin = dateRange.to + 'T23:59:59';
@@ -105,7 +111,11 @@ const JefeReportesPage = ({ user = {} }) => {
       setError('');
     } catch (error) {
       console.error(`Error cargando reporte ${tipo}:`, error);
-      setError(`Error cargando reporte de ${tipo}`);
+      if (error?.response?.status === 401) {
+        setError('Tu sesión ha expirado o no tienes permisos. Inicia sesión nuevamente.');
+      } else {
+        setError(`Error cargando reporte de ${tipo}`);
+      }
     } finally {
       setLoading(false);
     }
@@ -128,6 +138,7 @@ const JefeReportesPage = ({ user = {} }) => {
   const reportOptions = [
     { id: 'dashboard', name: 'Dashboard', icono: BarChart3, descripcion: 'Vista general del sistema' },
     { id: 'caja-diaria', name: 'Caja diaria', icono: Activity, descripcion: 'Cuadre de caja por día' },
+    { id: 'moras', name: 'Moras', icono: FileText, descripcion: 'Historial de moras por retraso' },
     { id: 'recursos-populares', name: 'Recursos Populares', icono: TrendingUp, descripcion: 'Recursos más alquilados' },
     { id: 'tasa-cancelacion', name: 'Cancelaciones', icono: PieChart, descripcion: 'Tasa de cancelación' },
     { id: 'ingresos', name: 'Ingresos', icono: DollarSign, descripcion: 'Reporte financiero' },
@@ -175,89 +186,90 @@ const JefeReportesPage = ({ user = {} }) => {
       return <CajaDiariaSection data={reporteData} />;
     }
 
-    if (reportType === 'caja-diaria') {
+    if (reportType === 'quien-alquilo-que') {
       const d = reporteData || {};
-      const totAlq = d.totalesPorMedioAlquiler || {};
-      const totRes = d.totalesPorMedioReservas || {};
-      const detalle = Array.isArray(d.detalleOperaciones) ? d.detalleOperaciones : [];
+      // Normalizar lista de resultados: admite array directamente o en propiedades comunes
+      const lista = Array.isArray(d)
+        ? d
+        : Array.isArray(d.items) ? d.items
+        : Array.isArray(d.resultados) ? d.resultados
+        : Array.isArray(d.alquileres) ? d.alquileres
+        : Array.isArray(d.data) ? d.data
+        : [];
+
+      // Calcular resumen básico
+      const total = lista.length;
+      const turistas = new Set();
+      const recursos = new Set();
+      lista.forEach((it) => {
+        const t = it.turista || it.nombreTurista || it.cliente || '';
+        const r = it.recurso || it.nombreRecurso || it.producto || '';
+        if (t) turistas.add(typeof t === 'object' ? (t.nombre || t.username || t.id || JSON.stringify(t)) : t);
+        if (r) recursos.add(typeof r === 'object' ? (r.nombre || r.codigo || r.id || JSON.stringify(r)) : r);
+      });
+
       return (
         <div className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {/* Resumen */}
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
             <Card className="p-6">
-              <div className="text-sm text-gray-600">Efectivo recibido</div>
-              <div className="text-3xl font-bold">S/. {Number(d.totalEfectivoRecibido || 0).toFixed(2)}</div>
+              <div className="text-sm text-gray-600">Total de registros</div>
+              <div className="text-3xl font-bold text-gray-900">{total}</div>
             </Card>
             <Card className="p-6">
-              <div className="text-sm text-gray-600">Vueltos</div>
-              <div className="text-3xl font-bold">S/. {Number(d.totalVueltoEfectivo || 0).toFixed(2)}</div>
+              <div className="text-sm text-gray-600">Turistas únicos</div>
+              <div className="text-3xl font-bold text-gray-900">{turistas.size}</div>
             </Card>
             <Card className="p-6">
-              <div className="text-sm text-gray-600">Efectivo neto en caja</div>
-              <div className="text-3xl font-bold">S/. {Number(d.efectivoNetoEnCaja || 0).toFixed(2)}</div>
-            </Card>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <Card className="p-6">
-              <h4 className="text-lg font-semibold mb-4">Totales por medio (Alquileres)</h4>
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                {Object.entries(totAlq).map(([medio, monto]) => (
-                  <div key={medio} className="flex justify-between">
-                    <span className="capitalize">{medio.toLowerCase()}</span>
-                    <span className="font-medium">S/. {Number(monto || 0).toFixed(2)}</span>
-                  </div>
-                ))}
-                {Object.keys(totAlq).length === 0 && (
-                  <div className="text-gray-500">Sin datos</div>
-                )}
-              </div>
-            </Card>
-            <Card className="p-6">
-              <h4 className="text-lg font-semibold mb-4">Totales por medio (Reservas)</h4>
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                {Object.entries(totRes).map(([medio, monto]) => (
-                  <div key={medio} className="flex justify-between">
-                    <span className="capitalize">{medio.toLowerCase()}</span>
-                    <span className="font-medium">S/. {Number(monto || 0).toFixed(2)}</span>
-                  </div>
-                ))}
-                {Object.keys(totRes).length === 0 && (
-                  <div className="text-gray-500">Sin datos</div>
-                )}
-              </div>
+              <div className="text-sm text-gray-600">Recursos únicos</div>
+              <div className="text-3xl font-bold text-gray-900">{recursos.size}</div>
             </Card>
           </div>
 
+          {/* Tabla */}
           <Card className="p-6 overflow-auto">
-            <h4 className="text-lg font-semibold mb-4">Operaciones del día</h4>
+            <h4 className="mb-4 text-lg font-semibold text-gray-900">Detalle</h4>
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-gray-600">
-                  <th className="py-2 pr-3">Tipo</th>
-                  <th className="py-2 pr-3">ID</th>
+                  <th className="py-2 pr-3">Fecha</th>
+                  <th className="py-2 pr-3">Turista</th>
+                  <th className="py-2 pr-3">Recurso</th>
                   <th className="py-2 pr-3">Gestor</th>
                   <th className="py-2 pr-3">Método</th>
                   <th className="py-2 pr-3">Total</th>
-                  <th className="py-2 pr-3">Pagado</th>
-                  <th className="py-2 pr-3">Vuelto</th>
-                  <th className="py-2 pr-3">Fecha/Hora</th>
+                  <th className="py-2 pr-3">Estado</th>
                 </tr>
               </thead>
               <tbody>
-                {detalle.map((op, idx) => (
-                  <tr key={idx} className="border-t">
-                    <td className="py-2 pr-3">{op.tipo}</td>
-                    <td className="py-2 pr-3">{op.id}</td>
-                    <td className="py-2 pr-3">{op.gestor || '-'}</td>
-                    <td className="py-2 pr-3">{op.metodoPago}</td>
-                    <td className="py-2 pr-3">S/. {Number(op.total || 0).toFixed(2)}</td>
-                    <td className="py-2 pr-3">S/. {Number(op.pagado || 0).toFixed(2)}</td>
-                    <td className="py-2 pr-3">S/. {Number(op.vuelto || 0).toFixed(2)}</td>
-                    <td className="py-2 pr-3">{op.fechaHora}</td>
+                {lista.map((it, idx) => {
+                  const fecha = it.fecha || it.fechaHora || it.fechaAlquiler || '';
+                  const turista = typeof it.turista === 'object' ? (it.turista?.nombre || it.turista?.username || it.turista?.id) : (it.turista || it.nombreTurista || it.cliente || '-');
+                  const recurso = typeof it.recurso === 'object' ? (it.recurso?.nombre || it.recurso?.codigo || it.recurso?.id) : (it.recurso || it.nombreRecurso || it.producto || '-');
+                  const gestor = it.gestor || it.usuario || it.atendidoPor || '-';
+                  const metodo = it.metodoPago || it.medio || '-';
+                  const totalStr = it.total != null ? Number(it.total).toFixed(2) : (it.monto != null ? Number(it.monto).toFixed(2) : '-');
+                  const estado = it.estado || it.estadoAlquiler || '-';
+                  return (
+                    <tr key={idx} className="border-t">
+                      <td className="py-2 pr-3">{fecha}</td>
+                      <td className="py-2 pr-3">{turista}</td>
+                      <td className="py-2 pr-3">{recurso}</td>
+                      <td className="py-2 pr-3">{gestor}</td>
+                      <td className="py-2 pr-3">{metodo}</td>
+                      <td className="py-2 pr-3">{totalStr === '-' ? '-' : `S/. ${totalStr}`}</td>
+                      <td className="py-2 pr-3">
+                        {estado !== '-' ? (
+                          <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-700 capitalize">{String(estado).toLowerCase()}</span>
+                        ) : '-'}
+                      </td>
+                    </tr>
+                  );
+                })}
+                {lista.length === 0 && (
+                  <tr>
+                    <td colSpan="7" className="py-3 text-center text-gray-500">Sin resultados</td>
                   </tr>
-                ))}
-                {detalle.length === 0 && (
-                  <tr><td colSpan="8" className="py-3 text-gray-500 text-center">Sin operaciones</td></tr>
                 )}
               </tbody>
             </table>
@@ -268,13 +280,13 @@ const JefeReportesPage = ({ user = {} }) => {
 
     return (
       <Card className="overflow-hidden">
-        <div className="p-6 border-b border-gray-100">
+        <div className="border-b border-gray-100 p-6">
           <h3 className="text-lg font-semibold text-gray-900">
             {reportOptions.find(r => r.id === reportType)?.name} - Resultados
           </h3>
         </div>
         <div className="p-6">
-          <pre className="bg-gray-50 p-4 rounded-lg overflow-auto text-sm">
+          <pre className="overflow-auto rounded-lg bg-gray-50 p-4 text-sm">
             {JSON.stringify(reporteData, null, 2)}
           </pre>
         </div>
@@ -329,11 +341,16 @@ const JefeReportesPage = ({ user = {} }) => {
             show={true}
             dateRange={dateRange}
             setDateRange={setDateRange}
-            onApply={() => cargarReporte(reportType)}
+            onApply={() => setApplyCounter(c => c + 1)}
             showGestor={reportType === 'caja-diaria'}
             gestores={gestores}
             gestorId={gestorId}
             setGestorId={setGestorId}
+            showTuristaRecurso={reportType === 'quien-alquilo-que'}
+            idTurista={idTurista}
+            setIdTurista={setIdTurista}
+            idRecurso={idRecurso}
+            setIdRecurso={setIdRecurso}
           />
         </Card>
       )}

@@ -1,7 +1,8 @@
 // src/pages/jefe/jefeDashboard.jsx
 import React, { useState, useEffect } from 'react';
-import { Package, DollarSign, Users, MapPin, FileText } from 'lucide-react';
+import { Package, DollarSign, Users, MapPin, FileText, User as UserIcon } from 'lucide-react';
 import api from '../../services/api';
+import { useNavigate } from 'react-router-dom';
 
 const JefeDashboard = ({ user }) => {
   const [stats, setStats] = useState({
@@ -66,12 +67,18 @@ const JefeDashboard = ({ user }) => {
           .slice(0, 5)
           .map(alq => {
             const turista = turistasData.find(t => t.idTurista === alq.idTurista);
-            const nombreCliente = turista ? `${turista.nombres} ${turista.apellidos}` : `Cliente ${alq.idTurista}`;
+            const nombreCliente = (alq.nombreCliente && alq.nombreCliente.trim().length > 0)
+              ? alq.nombreCliente
+              : (turista ? `${turista.nombres} ${turista.apellidos}` : `Cliente ${alq.idTurista}`);
+            const cantRec = Number.isFinite(Number(alq.cantidadRecursos)) ? Number(alq.cantidadRecursos) : (Array.isArray(alq.nombresRecursos) ? alq.nombresRecursos.length : (alq.detalles?.length || 1));
+            const fechaFmt = alq.fechaHoraInicioFmt && alq.fechaHoraInicioFmt.length > 0
+              ? alq.fechaHoraInicioFmt
+              : (() => { const d = parseLocalLima(alq.fechaHoraInicio); return d ? d.toLocaleString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'America/Lima' }) : ''; })();
             return {
               id: alq.idAlquiler,
               cliente: nombreCliente,
-              recurso: `${alq.detalles?.length || 1} recurso${alq.detalles?.length > 1 ? 's' : ''}`,
-              fecha: (() => { const d = parseLocalLima(alq.fechaHoraInicio); return d ? d.toLocaleString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'America/Lima' }) : ''; })(),
+              recurso: `${cantRec} recurso${cantRec === 1 ? '' : 's'}`,
+              fecha: fechaFmt,
               monto: alq.costoTotal || 0,
               estado: alq.estadoalquiler
             };
@@ -112,11 +119,13 @@ const JefeDashboard = ({ user }) => {
     </div>
   );
 
+  const navigate = useNavigate();
+
   const RecentBookingsTable = () => (
     <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
       <div className="p-6 border-b border-gray-100 flex justify-between items-center">
         <h3 className="text-lg font-semibold text-gray-900">Alquileres Recientes</h3>
-        <button className="text-blue-600 hover:text-blue-800 text-sm font-medium">Ver todos</button>
+        <button onClick={() => navigate('/jefe/alquileres')} className="text-blue-600 hover:text-blue-800 text-sm font-medium">Ver todos</button>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full">
@@ -135,7 +144,7 @@ const JefeDashboard = ({ user }) => {
             {alquileres.map((alquiler) => (
               <tr key={alquiler.id} className="hover:bg-gray-50">
                 <td className="px-6 py-4 whitespace-nowrap"><div className="text-sm font-medium text-gray-900">{alquiler.id}</div></td>
-                <td className="px-6 py-4 whitespace-nowrap"><div className="text-sm text-gray-900">{alquiler.cliente}</div></td>
+                <td className="px-6 py-4 whitespace-nowrap"><div className="text-sm text-gray-900 flex items-center"><UserIcon className="w-4 h-4 mr-2 text-gray-400" />{alquiler.cliente}</div></td>
                 <td className="px-6 py-4 whitespace-nowrap"><div className="text-sm text-gray-900">{alquiler.recurso}</div></td>
                 <td className="px-6 py-4 whitespace-nowrap"><div className="text-sm text-gray-900">{alquiler.fecha}</div></td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">S/. {Number(alquiler.monto || 0).toFixed(2)}</td>

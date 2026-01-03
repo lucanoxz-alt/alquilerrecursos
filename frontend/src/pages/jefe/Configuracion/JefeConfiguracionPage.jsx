@@ -225,69 +225,70 @@ const ConfiguracionPage = ({ user }) => {
   );
 
   return (
-    <div className="p-6 space-y-6">
-      {/* Header bonito */}
-      <div className="relative overflow-hidden rounded-xl border border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50">
-        <div className="p-6 flex items-center gap-4">
-          <div className="relative hidden" />
-          <div>
-            <h1 className="text-2xl font-semibold text-gray-900 flex items-center gap-2">
-              <Settings className="w-6 h-6 text-blue-600" /> Configuración
-            </h1>
-            <p className="text-sm text-gray-600">Gestiona tu perfil, seguridad y preferencias del sistema.</p>
+    <div className="p-6">
+      <div className="mx-auto max-w-5xl space-y-6">
+        {/* Header */}
+        <div className="relative overflow-hidden rounded-xl border border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50">
+          <div className="flex items-center gap-4 p-6">
+            <div>
+              <h1 className="flex items-center gap-2 text-2xl font-semibold text-gray-900">
+                <Settings className="h-6 w-6 text-blue-600" /> Configuración
+              </h1>
+              <p className="text-sm text-gray-600">Gestiona tu perfil, seguridad y preferencias del sistema xdxddxd.</p>
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* Tabs */}
-      <div className="flex gap-2">
-        <TabButton id="perfil" icon={User}>Perfil</TabButton>
-        <TabButton id="seguridad" icon={Key}>Seguridad</TabButton>
-        <TabButton id="notificaciones" icon={Bell}>Notificaciones</TabButton>
-      </div>
-
-      {/* Mensajes */}
-      {error && (
-        <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 text-red-700 rounded">
-          <AlertCircle className="w-4 h-4" /> {error}
+        {/* Tabs */}
+        <div className="flex flex-wrap gap-2">
+          <TabButton id="perfil" icon={User}>Perfil</TabButton>
+          <TabButton id="seguridad" icon={Key}>Seguridad</TabButton>
+          <TabButton id="notificaciones" icon={Bell}>Notificaciones</TabButton>
         </div>
-      )}
-      {success && (
-        <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 text-green-700 rounded">
-          <Check className="w-4 h-4" /> {success}
+
+        {/* Mensajes */}
+        {error && (
+          <div className="flex items-center gap-2 rounded border border-red-200 bg-red-50 p-3 text-red-700">
+            <AlertCircle className="h-4 w-4" /> {error}
+          </div>
+        )}
+        {success && (
+          <div className="flex items-center gap-2 rounded border border-green-200 bg-green-50 p-3 text-green-700">
+            <Check className="h-4 w-4" /> {success}
+          </div>
+        )}
+
+        {/* Contenido */}
+        <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+          {activeTab === 'perfil' && (
+            <PerfilSection
+              userData={userData}
+              profileData={profileData}
+              setProfileData={setProfileData}
+              editMode={editMode}
+              setEditMode={setEditMode}
+              loading={loading}
+              onSaveProfile={onSaveProfile}
+            />
+          )}
+
+          {activeTab === 'seguridad' && (
+            <SeguridadSection
+              securityData={securityData}
+              setSecurityData={setSecurityData}
+              loading={loading}
+              onChangePassword={onChangePassword}
+            />
+          )}
+
+          {activeTab === 'notificaciones' && (
+            <NotificacionesSection
+              notifications={notifications}
+              setNotifications={setNotifications}
+              onSaveNotifications={onSaveNotifications}
+            />
+          )}
         </div>
-      )}
-
-      {/* Contenido */}
-      <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
-        {activeTab === 'perfil' && (
-          <PerfilSection
-            userData={userData}
-            profileData={profileData}
-            setProfileData={setProfileData}
-            editMode={editMode}
-            setEditMode={setEditMode}
-            loading={loading}
-            onSaveProfile={onSaveProfile}
-          />
-        )}
-
-        {activeTab === 'seguridad' && (
-          <SeguridadSection
-            securityData={securityData}
-            setSecurityData={setSecurityData}
-            loading={loading}
-            onChangePassword={onChangePassword}
-          />
-        )}
-
-        {activeTab === 'notificaciones' && (
-          <NotificacionesSection
-            notifications={notifications}
-            setNotifications={setNotifications}
-            onSaveNotifications={onSaveNotifications}
-          />
-        )}
       </div>
     </div>
   );

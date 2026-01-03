@@ -24,7 +24,6 @@ public class ComprobanteElectronicoService {
         return comprobantePagoService.generarPDFDesdeDatos(data);
     }
 
-    public byte[] generarXmlUblPorPago(String idPago, String tipo) {
         Map<String,Object> data = comprobantePagoService.generarDatosComprobantePagoPorPago(idPago);
         String xml = generarUblInvoiceXml(data, tipo, false);
         return persistAndReturn(xml, tipo, (Map<String,Object>) data.get("pago"));
@@ -40,7 +39,6 @@ public class ComprobanteElectronicoService {
         return comprobantePagoReservaService.generarPDF(data);
     }
 
-    public byte[] generarXmlUblPorPagoReserva(String idPagoReserva, String tipo) {
         Map<String,Object> data = comprobantePagoReservaService.generarDatosPorPagoReserva(idPagoReserva);
         String xml = generarUblInvoiceXml(data, tipo, true);
         return persistAndReturn(xml, tipo, (Map<String,Object>) data.get("pago"));
@@ -48,7 +46,6 @@ public class ComprobanteElectronicoService {
 
     // --- Métodos auxiliares mínimos para compilar ---
     @SuppressWarnings({"rawtypes","unchecked"})
-    private String generarUblInvoiceXml(Map<String,Object> data, String tipo, boolean esReserva) {
         Map empresa = (Map) data.get("empresa");
         Map pago = (Map) data.get("pago");
         Map resumen = (Map) data.get("resumen");
@@ -84,7 +81,6 @@ public class ComprobanteElectronicoService {
         return sb.toString();
     }
 
-    private byte[] persistAndReturn(String xml, String tipo, Map<String,Object> pago) {
         try {
             java.time.LocalDateTime now = java.time.LocalDateTime.now();
             java.nio.file.Path base = java.nio.file.Paths.get("docs","comprobantes",
@@ -98,7 +94,6 @@ public class ComprobanteElectronicoService {
         return xml.getBytes(java.nio.charset.StandardCharsets.UTF_8);
     }
 
-    private static String escape(String s) {
         if (s == null) return "";
         return s.replace("&","&amp;").replace("<","&lt;").replace(">","&gt;").replace("\"","&quot;").replace("'","&apos;");
     }

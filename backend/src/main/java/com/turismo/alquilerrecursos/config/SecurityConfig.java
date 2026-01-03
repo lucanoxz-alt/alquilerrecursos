@@ -80,7 +80,7 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/api/auth/login").permitAll()
                 .requestMatchers("/api/boletas/**", "/api/comprobantes-pago/**", "/api/comprobantes-pago-reserva/**", "/api/comprobantes-electronicos/**").permitAll()
-                .requestMatchers("/api/alquileres/*/ticket", "/api/alquileres/*/factura", "/api/alquileres/*/xml").permitAll()
+                .requestMatchers("/api/alquileres/*/ticket").permitAll()
                 .anyRequest().authenticated()
             )
             .authenticationProvider(authenticationProvider())

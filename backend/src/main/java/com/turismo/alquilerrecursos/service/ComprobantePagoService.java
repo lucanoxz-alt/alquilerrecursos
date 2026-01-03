@@ -64,9 +64,11 @@ public class ComprobantePagoService {
             items.add(item);
         }
 
-        BigDecimal subtotal = pago.getSubtotal();
         BigDecimal total = pago.getTotalFinal();
-        BigDecimal igv = total.subtract(subtotal);
+        java.math.BigDecimal rate = empresaProperties.getIgvRate() != null ? empresaProperties.getIgvRate() : new java.math.BigDecimal("0.18");
+        java.math.BigDecimal divisor = java.math.BigDecimal.ONE.add(rate);
+        BigDecimal gravadas = total.divide(divisor, 2, java.math.RoundingMode.HALF_UP);
+        BigDecimal igv = total.subtract(gravadas);
 
         data.put("empresa", empresa);
         data.put("cliente", Map.of(
@@ -83,7 +85,7 @@ public class ComprobantePagoService {
         ));
         data.put("items", items);
         data.put("resumen", Map.of(
-            "gravadas", subtotal,
+            "gravadas", gravadas,
             "igv", igv,
             "total", total,
             "enLetras", NumeroALetrasUtil.aMonedaPeru(total)
@@ -94,7 +96,6 @@ public class ComprobantePagoService {
         return data;
     }
 
-    public String generarHTML(Map<String, Object> data) {
         // Se soportan tipos: 'FACTURA' (por defecto) o 'TICKET'
         String tipo = data.containsKey("tipo") ? String.valueOf(data.get("tipo")) : "FACTURA";
 
@@ -166,11 +167,8 @@ public class ComprobantePagoService {
         html.append("</tbody></table>");
 
         html.append("<div class='totales'><table>");
-        // Para TICKET omitimos IGV (simplificado)
         html.append("<tr><td>OP. GRAVADAS</td><td class='right'>").append(resumen.get("gravadas")).append("</td></tr>");
-        if (!"TICKET".equalsIgnoreCase(tipo)) {
-            html.append("<tr><td>IGV (18%)</td><td class='right'>").append(resumen.get("igv")).append("</td></tr>");
-        }
+        html.append("<tr><td>IGV (18%)</td><td class='right'>").append(resumen.get("igv")).append("</td></tr>");
         html.append("<tr><th>TOTAL A PAGAR</th><th class='right'>").append(resumen.get("total")).append("</th></tr>");
         html.append("</table>");
         html.append("<div class='muted'>Son: ").append(resumen.get("enLetras")).append("</div>");
@@ -184,20 +182,83 @@ public class ComprobantePagoService {
     }
 
     public byte[] generarPDFDesdeDatos(Map<String, Object> data) {
-        String html = generarHTML(data);
         try (java.io.ByteArrayOutputStream os = new java.io.ByteArrayOutputStream()) {
-            com.openhtmltopdf.pdfboxout.PdfRendererBuilder builder = new com.openhtmltopdf.pdfboxout.PdfRendererBuilder();
-            builder.useFastMode();
-            builder.withHtmlContent(html, null);
-            builder.toStream(os);
-            builder.run();
+            com.itextpdf.kernel.pdf.PdfWriter writer = new com.itextpdf.kernel.pdf.PdfWriter(os);
+            com.itextpdf.kernel.pdf.PdfDocument pdf = new com.itextpdf.kernel.pdf.PdfDocument(writer);
+            com.itextpdf.layout.Document doc = new com.itextpdf.layout.Document(pdf);
+
+            Map<String,Object> empresa = (Map<String,Object>) data.get("empresa");
+            Map<String,Object> cliente = (Map<String,Object>) data.get("cliente");
+            Map<String,Object> pago = (Map<String,Object>) data.get("pago");
+            Map<String,Object> resumen = (Map<String,Object>) data.get("resumen");
+            java.util.List<java.util.Map<String,Object>> items = (java.util.List<java.util.Map<String,Object>>) data.get("items");
+
+            // Cabecera
+            doc.add(new com.itextpdf.layout.element.Paragraph(String.valueOf(empresa.get("nombre"))).setBold().setFontSize(14));
+            doc.add(new com.itextpdf.layout.element.Paragraph("RUC " + String.valueOf(empresa.get("ruc"))));
+            doc.add(new com.itextpdf.layout.element.Paragraph(String.valueOf(empresa.get("direccion"))));
+            doc.add(new com.itextpdf.layout.element.Paragraph(String.valueOf(empresa.get("telefono")) + " | " + String.valueOf(empresa.get("email"))));
+            doc.add(new com.itextpdf.layout.element.Paragraph(" "));
+
+            String num = pago.get("num") != null ? String.valueOf(pago.get("num")) : "";
+            doc.add(new com.itextpdf.layout.element.Paragraph("COMPROBANTE DE PAGO").setBold());
+            doc.add(new com.itextpdf.layout.element.Paragraph("N° " + num));
+            doc.add(new com.itextpdf.layout.element.Paragraph("Fecha emisión: " + String.valueOf(pago.get("fecha"))));
+            doc.add(new com.itextpdf.layout.element.Paragraph("Orden compra: " + String.valueOf(pago.get("idAlquiler"))));
+            doc.add(new com.itextpdf.layout.element.Paragraph("Forma de pago: " + String.valueOf(pago.get("metodo"))));
+
+            doc.add(new com.itextpdf.layout.element.Paragraph(" "));
+            doc.add(new com.itextpdf.layout.element.Paragraph("Cliente: " + String.valueOf(cliente.get("nombre"))));
+            doc.add(new com.itextpdf.layout.element.Paragraph("DNI/RUC: " + String.valueOf(cliente.get("documento"))));
+            doc.add(new com.itextpdf.layout.element.Paragraph("Email: " + String.valueOf(cliente.get("email"))));
+
+            // Tabla de items
+            com.itextpdf.layout.element.Table table = new com.itextpdf.layout.element.Table(new float[]{1, 2, 5, 2, 2, 2});
+            table.setWidthPercent(100);
+            String[] headers = {"CANT.", "UNIDAD", "DESCRIPCIÓN", "P. UNIT.", "DTO.", "TOTAL"};
+            for (String h : headers) table.addHeaderCell(new com.itextpdf.layout.element.Cell().add(new com.itextpdf.layout.element.Paragraph(h).setBold()));
+            for (java.util.Map<String,Object> it : items) {
+                table.addCell(String.valueOf(it.get("cantidad")));
+                table.addCell(String.valueOf(it.get("unidad")));
+                table.addCell(String.valueOf(it.get("descripcion")));
+                table.addCell(String.valueOf(it.get("pUnit")));
+                table.addCell(String.valueOf(it.get("dto")));
+                table.addCell(String.valueOf(it.get("total")));
+            }
+            doc.add(new com.itextpdf.layout.element.Paragraph(" "));
+            doc.add(table);
+
+            // Totales
+            com.itextpdf.layout.element.Table tot = new com.itextpdf.layout.element.Table(new float[]{4,2});
+            tot.setWidthPercent(50).setHorizontalAlignment(com.itextpdf.layout.property.HorizontalAlignment.RIGHT);
+            tot.addCell("OP. GRAVADAS"); tot.addCell(String.valueOf(resumen.get("gravadas")));
+            tot.addCell("IGV (" + empresaProperties.getIgvRate().movePointRight(2) + "%)"); tot.addCell(String.valueOf(resumen.get("igv")));
+            tot.addCell(new com.itextpdf.layout.element.Cell().add(new com.itextpdf.layout.element.Paragraph("TOTAL A PAGAR").setBold()));
+            tot.addCell(new com.itextpdf.layout.element.Cell().add(new com.itextpdf.layout.element.Paragraph(String.valueOf(resumen.get("total"))).setBold()));
+            doc.add(new com.itextpdf.layout.element.Paragraph(" "));
+            doc.add(tot);
+            doc.add(new com.itextpdf.layout.element.Paragraph("Son: " + String.valueOf(resumen.get("enLetras"))));
+
+            // QR y hash si existen
+            try {
+                String qrDataUri = (String) data.get("qr");
+                if (qrDataUri != null && qrDataUri.startsWith("data:image")) {
+                    String base64 = qrDataUri.substring(qrDataUri.indexOf(",")+1);
+                    byte[] bytes = java.util.Base64.getDecoder().decode(base64);
+                    com.itextpdf.layout.element.Image img = new com.itextpdf.layout.element.Image(com.itextpdf.io.image.ImageDataFactory.create(bytes));
+                    img.setWidth(120); img.setHeight(120);
+                    doc.add(img);
+                }
+            } catch (Exception ignore) {}
+            if (data.get("hash") != null) doc.add(new com.itextpdf.layout.element.Paragraph("HASH: " + String.valueOf(data.get("hash"))).setFontSize(9));
+
+            doc.close();
             return os.toByteArray();
         } catch (Exception e) {
-            throw new RuntimeException("Error generando PDF de pago", e);
+            throw new RuntimeException("Error generando PDF de pago (iText)", e);
         }
     }
 
-    public String generarXMLDesdeDatos(Map<String, Object> data) {
         // Genera un XML sencillo con la estructura requerida
         Map<String,Object> empresa = (Map<String,Object>) data.get("empresa");
         Map<String,Object> cliente = (Map<String,Object>) data.get("cliente");

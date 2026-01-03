@@ -9,7 +9,7 @@ import { User, Lock, AlertCircle } from 'lucide-react';
 import api from '../../services/api';
 
 // Componente LoginForm recibe onLogin desde el padre
-const LoginForm = ({ onLogin }) => {
+const LoginForm = ({ onLogin = () => {} }) => {
 
   // Estados para controlar inputs y estados de la UI
   const [username, setUsername] = useState('');

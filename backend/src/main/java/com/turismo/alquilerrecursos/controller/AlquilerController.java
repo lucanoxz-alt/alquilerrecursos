@@ -35,11 +35,14 @@ public class AlquilerController {
     @Autowired
     private RecursoRepository recursoRepository;
 
+    @Autowired
+    private com.turismo.alquilerrecursos.service.DetalleAlquilerService detalleAlquilerService;
+
     /**
      * Crear un nuevo alquiler
      */
     @PostMapping
-    public ResponseEntity<?> crearAlquiler(@RequestBody AlquilerRequest request) {
+   public ResponseEntity<?> crearAlquiler(@RequestBody AlquilerRequest request) {
         try {
             Alquiler nuevoAlquiler = alquilerService.crearAlquiler(request);
             return ResponseEntity.ok(nuevoAlquiler);
@@ -61,7 +64,85 @@ public class AlquilerController {
         }
     }
 
-    /**
+   /**
+    * Listar detalles de un alquiler con info de recurso
+    */
+   @GetMapping("/{idAlquiler}/detalles")
+   public ResponseEntity<?> listarDetalles(@PathVariable String idAlquiler) {
+       try {
+           return ResponseEntity.ok(detalleAlquilerService.listarDetallesConRecurso(idAlquiler));
+       } catch (RuntimeException e) {
+           return ResponseEntity.badRequest().body(java.util.Map.of("error", e.getMessage()));
+       }
+   }
+
+   /**
+    * Finalizar un recurso del alquiler con cálculo de mora
+    */
+   @PostMapping("/{idAlquiler}/finalizar-recurso")
+   public ResponseEntity<?> finalizarRecurso(@PathVariable String idAlquiler, @RequestBody com.turismo.alquilerrecursos.service.DetalleAlquilerService.FinalizarRecursoRequest req) {
+       try {
+           var resp = detalleAlquilerService.finalizarRecurso(idAlquiler, req);
+           java.util.Map<String,Object> body = new java.util.HashMap<>();
+           body.put("moraAplicada", resp.moraAplicada);
+           body.put("estadoRecurso", resp.estadoRecurso);
+           if (resp.moraTotal != null && resp.moraTotal.compareTo(java.math.BigDecimal.ZERO) > 0) {
+               body.put("moraTotal", resp.moraTotal);
+               body.put("detallesMora", resp.detallesMora);
+           }
+           return ResponseEntity.ok(body);
+       } catch (RuntimeException e) {
+           return ResponseEntity.badRequest().body(java.util.Map.of("error", e.getMessage()));
+       }
+   }
+
+   /** Registrar pago consolidado de mora cuando todos los recursos ya fueron devueltos */
+   @PostMapping("/{idAlquiler}/registrar-mora")
+   public ResponseEntity<?> registrarMora(@PathVariable String idAlquiler, @RequestBody java.util.Map<String,String> body) {
+       try {
+           String metodo = body.getOrDefault("metodoPago", "Efectivo");
+           java.math.BigDecimal total = java.math.BigDecimal.ZERO;
+           // Recalcular total de mora de todos los detalles
+           var todos = detalleAlquilerRepository.findByIdAlquiler(idAlquiler);
+           var alquiler = alquilerRepository.findById(idAlquiler).orElseThrow();
+           for (var d : todos) {
+               if (d.getFechaDevolucionReal() != null) {
+                   var rec = recursoRepository.findById(d.getIdRecurso()).orElse(null);
+                   if (rec != null) {
+                       java.time.LocalDateTime hTheo = alquiler.getFechaHoraInicio().plusHours(d.getHorasRealizadas() != null ? d.getHorasRealizadas() : alquiler.getDuracionHoras());
+                       long min = Math.max(0, java.time.Duration.between(hTheo, d.getFechaDevolucionReal()).toMinutes());
+                       if (min > 5) min -= 5; else min = 0;
+                       if (min > 0) {
+                           java.math.BigDecimal mora = java.math.BigDecimal.valueOf(min).divide(java.math.BigDecimal.valueOf(60), 8, java.math.RoundingMode.HALF_UP).multiply(rec.getTarifaHora()).setScale(2, java.math.RoundingMode.DOWN);
+                           total = total.add(mora);
+                       }
+                   }
+               }
+           }
+           if (total.compareTo(java.math.BigDecimal.ZERO) <= 0) {
+               return ResponseEntity.badRequest().body(java.util.Map.of("error", "No hay mora que cobrar"));
+           }
+           // Crear pago
+           com.turismo.alquilerrecursos.model.Pago pago = new com.turismo.alquilerrecursos.model.Pago();
+           String idPago = "PAG" + String.format("%03d", pagoRepository.findAll().size() + 1);
+           pago.setIdPago(idPago);
+           pago.setIdAlquiler(idAlquiler);
+           pago.setSubtotal(total);
+           pago.setDescuentoAplicado(java.math.BigDecimal.ZERO);
+           pago.setTotalFinal(total);
+           pago.setMontoPagado(total);
+           pago.setFechaEmision(java.time.LocalDateTime.now());
+           pago.setMetodoPago(metodo);
+           String num = "MORA-" + idAlquiler + "-" + String.format("%03d", pagoRepository.findAll().stream().filter(p -> java.util.Objects.equals(p.getIdAlquiler(), idAlquiler)).count() + 1);
+           pago.setNumBoleta(num);
+           pagoRepository.save(pago);
+           return ResponseEntity.ok(java.util.Map.of("boletaMora", num, "total", total));
+       } catch (RuntimeException e) {
+           return ResponseEntity.badRequest().body(java.util.Map.of("error", e.getMessage()));
+       }
+   }
+
+   /**
      * Obtener todos los alquileres
      */
     @GetMapping

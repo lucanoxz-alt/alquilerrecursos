@@ -12,6 +12,7 @@ public class EmpresaProperties {
     private String telefono = "";
     private String email = "";
     private String logoUrl = "";
+    private java.math.BigDecimal igvRate = new java.math.BigDecimal("0.18");
 
     public String getNombre() { return nombre; }
     public void setNombre(String nombre) { this.nombre = nombre; }
@@ -25,4 +26,6 @@ public class EmpresaProperties {
     public void setEmail(String email) { this.email = email; }
     public String getLogoUrl() { return logoUrl; }
     public void setLogoUrl(String logoUrl) { this.logoUrl = logoUrl; }
+    public java.math.BigDecimal getIgvRate() { return igvRate; }
+    public void setIgvRate(java.math.BigDecimal igvRate) { this.igvRate = igvRate; }
 }

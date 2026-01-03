@@ -89,6 +89,81 @@ const GestionClientes = () => {
     });
   };
 
+  const exportarCSV = () => {
+    if (!clientes || clientes.length === 0) {
+      alert('No hay clientes para exportar');
+      return;
+    }
+    const sep = ';';
+    const headers = ['ID','NOMBRES','APELLIDOS','DNI/PASAPORTE','NACIONALIDAD','TELEFONO','EMAIL'];
+    const rows = [headers.join(sep)];
+    const esc = (v) => String(v ?? '').replace(/"/g, '""');
+    clientes.forEach(c => {
+      rows.push([
+        esc(c.idTurista),
+        '"'+esc(c.nombres)+'"',
+        '"'+esc(c.apellidos)+'"',
+        '"'+esc(c.dniPasaporte)+'"',
+        '"'+esc(c.nacionalidad)+'"',
+        '"'+esc(c.telefono)+'"',
+        '"'+esc(c.email)+'"',
+      ].join(sep));
+    });
+    const BOM='\uFEFF';
+    const blob = new Blob([BOM + rows.join('\n')], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = `clientes_${Date.now()}.csv`; document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const onImportFile = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
+      if (lines.length <= 1) { alert('Archivo vacío'); return; }
+      const sep = text.includes(';') ? ';' : ',';
+      const [header, ...dataLines] = lines;
+      // Mapear columnas por nombre (flexible)
+      const cols = header.split(sep).map(h => h.trim().replace(/^"|"$/g,''));
+      const idx = (name) => cols.findIndex(c => c.toLowerCase().includes(name));
+      const idxNombres = idx('nomb');
+      const idxApellidos = idx('apell');
+      const idxDni = idx('dni') >=0 ? idx('dni') : idx('pasap');
+      const idxNac = idx('nacion');
+      const idxTel = idx('tele');
+      const idxMail = idx('mail');
+      let countOk = 0, countErr = 0;
+      for (const line of dataLines) {
+        const parts = line.split(sep).map(p => p.trim().replace(/^"|"$/g,''));
+        const payload = {
+          nombres: parts[idxNombres] || '',
+          apellidos: parts[idxApellidos] || '',
+          dniPasaporte: parts[idxDni] || '',
+          nacionalidad: parts[idxNac] || '',
+          telefono: parts[idxTel] || '',
+          email: parts[idxMail] || ''
+        };
+        if (!payload.nombres || !payload.apellidos || !payload.dniPasaporte) { countErr++; continue; }
+        try {
+          await api.post('/turistas', payload);
+          countOk++;
+        } catch (err) {
+          console.error('Error creando cliente', err);
+          countErr++;
+        }
+      }
+      alert(`Importación finalizada. Creados: ${countOk}, con errores: ${countErr}`);
+      cargarClientes();
+    } catch (err) {
+      console.error('Error importando CSV', err);
+      alert('Error importando el archivo');
+    } finally {
+      e.target.value = '';
+    }
+  };
+
   const filteredClientes = clientes.filter(cliente =>
     cliente.nombres?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     cliente.apellidos?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -105,13 +180,26 @@ const GestionClientes = () => {
           </h1>
           <p className="text-gray-600 mt-2">Administra la información de turistas y clientes</p>
         </div>
-        <button
-          onClick={() => setShowModal(true)}
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center"
-        >
-          <Plus className="w-5 h-5 mr-2" />
-          Nuevo Cliente
-        </button>
+        <div className="flex gap-2">
+          <label className="bg-gray-100 text-gray-800 px-4 py-2 rounded-lg hover:bg-gray-200 border flex items-center cursor-pointer" title="Importar desde Excel (CSV)">
+            Importar
+            <input type="file" accept=".csv" onChange={onImportFile} className="hidden" />
+          </label>
+          <button
+            onClick={exportarCSV}
+            className="bg-gray-100 text-gray-800 px-4 py-2 rounded-lg hover:bg-gray-200 border flex items-center"
+            title="Exportar a Excel (CSV)"
+          >
+            Exportar
+          </button>
+          <button
+            onClick={() => setShowModal(true)}
+            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center"
+          >
+            <Plus className="w-5 h-5 mr-2" />
+            Nuevo Cliente
+          </button>
+        </div>
       </div>
 
       {/* Buscador */}

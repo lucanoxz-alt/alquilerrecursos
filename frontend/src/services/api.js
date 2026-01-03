@@ -26,8 +26,10 @@ api.interceptors.request.use(
     token = token || ssUser.token || ssUser.accessToken || ssUser.jwt || ssUser.idToken;
 
     const url = config.url || '';
+    const urlPath = (url || '').split('?')[0];
     // No enviar Authorization en endpoints públicos de comprobantes
-    const isPublicComprobante = /\/alquileres\/[^/]+\/(ticket|factura|xml)$/.test(url) || url.includes('/comprobantes-pago/');
+    const publicRegex = /\/alquileres\/[^/]+\/(ticket|factura|xml|pdf)$/;
+    const isPublicComprobante = publicRegex.test(urlPath) || urlPath.includes('/comprobantes-pago/') || urlPath.includes('/boletas/');
     if (token && !isPublicComprobante) {
       config.headers = config.headers || {};
       config.headers.Authorization = `Bearer ${token}`;
@@ -80,6 +82,19 @@ export const disponibilidadService = {
     }
   },
 
+  // Obtener disponibilidad detallada de todos los recursos
+  obtenerRecursosDetalle: async (fechaInicio, duracionHoras) => {
+    try {
+      const response = await api.get('/disponibilidad/recursos/detalle', {
+        params: { fechaInicio, duracionHoras }
+      });
+      return response.data; // { detalle: [...], ... }
+    } catch (error) {
+      console.error('Error obteniendo detalle de disponibilidad:', error);
+      throw error;
+    }
+  },
+
   // Verificar disponibilidad múltiple
   verificarMultiple: async (idsRecursos, fechaInicio, duracionHoras) => {
     try {
@@ -118,11 +133,29 @@ export const alquilerService = {
       console.error('Error finalizando alquiler:', error);
       throw error;
     }
+  },
+  // Mora - listar detalles y finalizar recurso
+  listarDetalles: async (idAlquiler) => {
+    const { data } = await api.get(`/alquileres/${idAlquiler}/detalles`);
+    return data;
+  },
+  finalizarRecurso: async (idAlquiler, payload) => {
+    const { data } = await api.post(`/alquileres/${idAlquiler}/finalizar-recurso`, payload);
+    return data;
   }
 };
 
 // Servicios para alquileres (extendido)
 export const alquilerServiceExtended = {
+  // Mora - listar detalles y finalizar recurso
+  listarDetalles: async (idAlquiler) => {
+    const { data } = await api.get(`/alquileres/${idAlquiler}/detalles`);
+    return data;
+  },
+  finalizarRecurso: async (idAlquiler, payload) => {
+    const { data } = await api.post(`/alquileres/${idAlquiler}/finalizar-recurso`, payload);
+    return data;
+  },
   // Obtener todos los alquileres
   obtenerTodos: async () => {
     try {

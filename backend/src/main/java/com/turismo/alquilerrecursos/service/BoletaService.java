@@ -113,9 +113,13 @@ public class BoletaService {
             datosPago.put("montoPagado", pago.getMontoPagado() != null ? pago.getMontoPagado() : java.math.BigDecimal.ZERO);
             datosPago.put("metodoPago", pago.getMetodoPago() != null ? pago.getMetodoPago() : "N/D");
             // IGV y letras
-            java.math.BigDecimal subtotal = pago.getSubtotal() != null ? pago.getSubtotal() : java.math.BigDecimal.ZERO;
             java.math.BigDecimal totalFinal = pago.getTotalFinal() != null ? pago.getTotalFinal() : java.math.BigDecimal.ZERO;
-            java.math.BigDecimal igv = totalFinal.subtract(subtotal);
+            // Calcular gravadas e IGV asumiendo que el precio ya incluye IGV (18%)
+            java.math.BigDecimal rate = empresaProperties.getIgvRate() != null ? empresaProperties.getIgvRate() : new java.math.BigDecimal("0.18");
+            java.math.BigDecimal divisor = java.math.BigDecimal.ONE.add(rate);
+            java.math.BigDecimal gravadas = totalFinal.divide(divisor, 2, java.math.RoundingMode.HALF_UP);
+            java.math.BigDecimal igv = totalFinal.subtract(gravadas);
+            datosPago.put("subtotal", gravadas);
             datosPago.put("igv", igv);
             datosPago.put("totalEnLetras", NumeroALetrasUtil.aMonedaPeru(totalFinal));
             // QR y hash
@@ -132,13 +136,18 @@ public class BoletaService {
             }
         } else {
             java.math.BigDecimal costo = alquiler.getCostoTotal() != null ? alquiler.getCostoTotal() : java.math.BigDecimal.ZERO;
+            java.math.BigDecimal rate = empresaProperties.getIgvRate() != null ? empresaProperties.getIgvRate() : new java.math.BigDecimal("0.18");
+            java.math.BigDecimal divisor = java.math.BigDecimal.ONE.add(rate);
+            java.math.BigDecimal gravadas = costo.divide(divisor, 2, java.math.RoundingMode.HALF_UP);
+            java.math.BigDecimal igv = costo.subtract(gravadas);
             datosPago.put("numBoleta", "N/D");
             datosPago.put("fechaEmision", LocalDateTime.now().format(formatter));
-            datosPago.put("subtotal", costo);
+            datosPago.put("subtotal", gravadas);
             datosPago.put("descuento", java.math.BigDecimal.ZERO);
             datosPago.put("totalFinal", costo);
             datosPago.put("montoPagado", costo);
             datosPago.put("metodoPago", "N/D");
+            datosPago.put("igv", igv);
         }
         
         // Estructurar respuesta
@@ -152,118 +161,6 @@ public class BoletaService {
         return datosBoleta;
     }
 
-    /**
-     * Generar boleta en formato HTML (para PDF)
-     */
-    public String generarBoletaHTML(String idAlquiler) {
-        try {
-            Map<String, Object> datos = generarDatosBoleta(idAlquiler);
-            
-            StringBuilder html = new StringBuilder();
-            html.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>");
-            html.append("<!DOCTYPE html>");
-            html.append("<html xmlns='http://www.w3.org/1999/xhtml' lang='es'>");
-            html.append("<head>");
-            html.append("<meta charset='UTF-8' />");
-            html.append("<title>Boleta de Alquiler</title>");
-            html.append("<style>");
-            html.append("body { font-family: Arial, sans-serif; margin: 20px; }");
-            html.append(".header { text-align: center; border-bottom: 2px solid #333; padding-bottom: 20px; }");
-            html.append(".section { margin: 20px 0; }");
-            html.append(".table { width: 100%; border-collapse: collapse; }");
-            html.append(".table th, .table td { border: 1px solid #ddd; padding: 8px; text-align: left; }");
-            html.append(".table th { background-color: #f2f2f2; }");
-            html.append(".total { font-weight: bold; font-size: 18px; }");
-            html.append("</style>");
-            html.append("</head>");
-            html.append("<body>");
-            
-            // Header de la empresa con formato tipo ticket
-            Map<String, Object> empresa = (Map<String, Object>) datos.get("empresa");
-            html.append("<div style='display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #333;padding-bottom:8px'>");
-            html.append("<div>");
-            html.append("<div style='font-weight:bold;font-size:16px'>").append(String.valueOf(empresa.get("nombre"))).append("</div>");
-            html.append("<div style='font-size:12px'>RUC ").append(String.valueOf(empresa.get("ruc"))).append("</div>");
-            html.append("<div style='font-size:12px'>").append(String.valueOf(empresa.get("direccion"))).append("</div>");
-            html.append("<div style='font-size:12px'>").append(String.valueOf(empresa.get("telefono"))).append(" | ").append(String.valueOf(empresa.get("email"))).append("</div>");
-            html.append("</div>");
-            html.append("<div style='text-align:right'>");
-            html.append("<div style='font-weight:bold'>FACTURA ELECTRÓNICA</div>");
-            Map<String, Object> pago = (Map<String, Object>) datos.get("pago");
-            html.append("<div style='font-size:12px'>N° ").append(String.valueOf(pago.get("numBoleta"))).append("</div>");
-            html.append("</div></div>");
-            
-            // Datos del alquiler y cliente
-            Map<String, Object> alquiler = (Map<String, Object>) datos.get("alquiler");
-            Map<String, Object> turista = (Map<String, Object>) datos.get("turista");
-            html.append("<div style='margin-top:8px;display:flex;justify-content:space-between'>");
-            html.append("<div>");
-            html.append("<div><strong>Cliente:</strong> ").append(String.valueOf(turista.get("nombres"))).append(" ").append(String.valueOf(turista.get("apellidos"))).append("</div>");
-            html.append("<div><strong>DNI/RUC:</strong> ").append(String.valueOf(turista.get("documento"))).append("</div>");
-            html.append("</div>");
-            html.append("<div style='text-align:right'>");
-            html.append("<div><strong>Fecha emisión:</strong> ").append(String.valueOf(pago.get("fechaEmision"))).append("</div>");
-            html.append("<div><strong>Orden compra:</strong> ").append(String.valueOf(alquiler.get("id"))).append("</div>");
-            html.append("<div><strong>ID Vendedor:</strong> ").append(String.valueOf(alquiler.getOrDefault("idVendedor",""))).append("</div>");
-            html.append("</div></div>");
-            
-            // Detalle de items
-            java.util.List<com.turismo.alquilerrecursos.model.DetalleAlquiler> detalles = (java.util.List<com.turismo.alquilerrecursos.model.DetalleAlquiler>) datos.get("detalles");
-            html.append("<table class='table' style='margin-top:10px;font-size:12px'>");
-            html.append("<thead><tr><th>CANT.</th><th>UNIDAD</th><th>DESCRIPCIÓN</th><th style='text-align:right'>P. UNIT.</th><th style='text-align:right'>DTO.</th><th style='text-align:right'>TOTAL</th></tr></thead><tbody>");
-            for (com.turismo.alquilerrecursos.model.DetalleAlquiler d : detalles) {
-                com.turismo.alquilerrecursos.model.Recurso r = recursoRepository.findById(d.getIdRecurso()).orElse(null);
-                java.math.BigDecimal pUnit = r != null ? r.getTarifaHora() : java.math.BigDecimal.ZERO;
-                String desc = (r != null ? r.getNombre() : d.getIdRecurso()) + (r != null && r.getDescripcion()!=null? " ("+r.getDescripcion()+")":"");
-                html.append("<tr>")
-                    .append("<td>").append(d.getHorasRealizadas()).append("</td>")
-                    .append("<td>HORA</td>")
-                    .append("<td>").append(desc).append("</td>")
-                    .append("<td style='text-align:right'>").append(pUnit).append("</td>")
-                    .append("<td style='text-align:right'>0</td>")
-                    .append("<td style='text-align:right'>").append(d.getCostoParcial()).append("</td>")
-                    .append("</tr>");
-            }
-            html.append("</tbody></table>");
-            
-            // Resumen financiero y en letras, QR y hash si existen
-            java.math.BigDecimal sub = toBigDecimalSafe(pago.get("subtotal"));
-            java.math.BigDecimal tot = toBigDecimalSafe(pago.get("totalFinal"));
-            java.math.BigDecimal igv = toBigDecimalSafe(pago.getOrDefault("igv", java.math.BigDecimal.ZERO));
-            Object letras = pago.getOrDefault("totalEnLetras", "");
-            Object qr = pago.getOrDefault("qrDataUri", null);
-            Object hash = pago.getOrDefault("hash", null);
-            html.append("<div style='display:flex;justify-content:space-between;align-items:flex-start;margin-top:10px'>");
-            html.append("<div>");
-            if (qr != null) {
-                html.append("<img src='").append(qr).append("' width='120' height='120'/>");
-            }
-            if (hash != null) {
-                html.append("<div style='font-size:11px;color:#555'>HASH: ").append(hash).append("</div>");
-            }
-            html.append("</div>");
-            html.append("<div style='width:45%'>");
-            html.append("<table class='table' style='font-size:12px'>");
-            html.append("<tr><td>OP. GRAVADAS</td><td style='text-align:right'>").append(sub).append("</td></tr>");
-            html.append("<tr><td>IGV (18%)</td><td style='text-align:right'>").append(igv).append("</td></tr>");
-            html.append("<tr><th>TOTAL A PAGAR</th><th style='text-align:right'>").append(tot).append("</th></tr>");
-            html.append("</table>");
-            if (letras != null && !letras.toString().isEmpty()) {
-                html.append("<div style='font-size:12px;color:#555'>Son: ").append(letras).append("</div>");
-            }
-            html.append("</div></div>");
-            
-            html.append("<div class='section' style='margin-top:8px'><em>Gracias por su preferencia!</em></div>");
-            
-            html.append("</body>");
-            html.append("</html>");
-            
-            return html.toString();
-        } catch (Exception e) {
-            logger.error("Error generando HTML de boleta para {}: {}", idAlquiler, e.getMessage(), e);
-            throw new RuntimeException("Error generando HTML de boleta para " + idAlquiler + ": " + e.getMessage(), e);
-        }
-    }
 
     private static java.math.BigDecimal toBigDecimalSafe(Object o) {
         if (o == null) return java.math.BigDecimal.ZERO;
@@ -280,28 +177,94 @@ public class BoletaService {
      * Generar boleta en PDF (bytes) usando OpenHTMLToPDF
      */
     public byte[] generarBoletaPDF(String idAlquiler) {
-        String html = generarBoletaHTML(idAlquiler);
-        // write HTML to temp file for debugging
-        try {
-            java.nio.file.Path tmp = java.nio.file.Files.createTempFile("boleta_" + idAlquiler + "_", ".html");
-            java.nio.file.Files.writeString(tmp, html, java.nio.charset.StandardCharsets.UTF_8);
-            logger.info("Boleta HTML escrita en archivo temporal: {} (longitud={})", tmp.toString(), html.length());
-        } catch (Exception ex) {
-            logger.warn("No se pudo escribir archivo temporal del HTML de boleta {}: {}", idAlquiler, ex.getMessage());
-        }
-
+        Map<String,Object> datos = generarDatosBoleta(idAlquiler);
         try (java.io.ByteArrayOutputStream os = new java.io.ByteArrayOutputStream()) {
-            logger.info("Iniciando generación de PDF para boleta {} (HTML length={})", idAlquiler, html.length());
-            com.openhtmltopdf.pdfboxout.PdfRendererBuilder builder = new com.openhtmltopdf.pdfboxout.PdfRendererBuilder();
-            builder.useFastMode();
-            builder.withHtmlContent(html, null);
-            builder.toStream(os);
-            builder.run();
-            logger.info("Generación de PDF completada para boleta {} (bytes={})", idAlquiler, os.size());
+            com.itextpdf.kernel.pdf.PdfWriter writer = new com.itextpdf.kernel.pdf.PdfWriter(os);
+            com.itextpdf.kernel.pdf.PdfDocument pdf = new com.itextpdf.kernel.pdf.PdfDocument(writer);
+            com.itextpdf.layout.Document doc = new com.itextpdf.layout.Document(pdf);
+
+            Map<String,Object> empresa = (Map<String,Object>) datos.get("empresa");
+            Map<String,Object> alquiler = (Map<String,Object>) datos.get("alquiler");
+            Map<String,Object> turista = (Map<String,Object>) datos.get("turista");
+            Map<String,Object> pago = (Map<String,Object>) datos.get("pago");
+            java.util.List<com.turismo.alquilerrecursos.model.DetalleAlquiler> detalles = (java.util.List<com.turismo.alquilerrecursos.model.DetalleAlquiler>) datos.get("detalles");
+
+            doc.add(new com.itextpdf.layout.element.Paragraph(String.valueOf(empresa.get("nombre"))).setBold().setFontSize(14));
+            doc.add(new com.itextpdf.layout.element.Paragraph("RUC " + String.valueOf(empresa.get("ruc"))));
+            doc.add(new com.itextpdf.layout.element.Paragraph(String.valueOf(empresa.get("direccion"))));
+            doc.add(new com.itextpdf.layout.element.Paragraph(String.valueOf(empresa.get("telefono")) + " | " + String.valueOf(empresa.get("email"))));
+
+            doc.add(new com.itextpdf.layout.element.Paragraph(" "));
+            doc.add(new com.itextpdf.layout.element.Paragraph("BOLETA").setBold());
+            doc.add(new com.itextpdf.layout.element.Paragraph("N° " + String.valueOf(pago.get("numBoleta"))));
+
+            doc.add(new com.itextpdf.layout.element.Paragraph("Cliente: " + String.valueOf(turista.get("nombres")) + " " + String.valueOf(turista.get("apellidos"))));
+            doc.add(new com.itextpdf.layout.element.Paragraph("DNI/RUC: " + String.valueOf(turista.get("documento"))));
+            doc.add(new com.itextpdf.layout.element.Paragraph("Fecha emisión: " + String.valueOf(pago.get("fechaEmision"))));
+            doc.add(new com.itextpdf.layout.element.Paragraph("Orden compra: " + String.valueOf(alquiler.get("id"))));
+            doc.add(new com.itextpdf.layout.element.Paragraph("ID Vendedor: " + String.valueOf(alquiler.getOrDefault("idVendedor",""))));
+
+            com.itextpdf.layout.element.Table table = new com.itextpdf.layout.element.Table(new float[]{1,2,5,2,2,2}).setWidthPercent(100);
+            table.addHeaderCell(new com.itextpdf.layout.element.Cell().add(new com.itextpdf.layout.element.Paragraph("CANT.").setBold()));
+            table.addHeaderCell(new com.itextpdf.layout.element.Cell().add(new com.itextpdf.layout.element.Paragraph("UNIDAD").setBold()));
+            table.addHeaderCell(new com.itextpdf.layout.element.Cell().add(new com.itextpdf.layout.element.Paragraph("DESCRIPCIÓN").setBold()));
+            table.addHeaderCell(new com.itextpdf.layout.element.Cell().add(new com.itextpdf.layout.element.Paragraph("P. UNIT.").setBold()));
+            table.addHeaderCell(new com.itextpdf.layout.element.Cell().add(new com.itextpdf.layout.element.Paragraph("DTO.").setBold()));
+            table.addHeaderCell(new com.itextpdf.layout.element.Cell().add(new com.itextpdf.layout.element.Paragraph("TOTAL").setBold()));
+
+            for (com.turismo.alquilerrecursos.model.DetalleAlquiler d : detalles) {
+                com.turismo.alquilerrecursos.model.Recurso r = recursoRepository.findById(d.getIdRecurso()).orElse(null);
+                java.math.BigDecimal pUnit = r != null ? r.getTarifaHora() : java.math.BigDecimal.ZERO;
+                String desc = (r != null ? r.getNombre() : d.getIdRecurso()) + (r != null && r.getDescripcion()!=null? " ("+r.getDescripcion()+")":"");
+                table.addCell(String.valueOf(d.getHorasRealizadas()));
+                table.addCell("HORA");
+                table.addCell(desc);
+                table.addCell(String.valueOf(pUnit));
+                table.addCell("0");
+                table.addCell(String.valueOf(d.getCostoParcial()));
+            }
+            doc.add(new com.itextpdf.layout.element.Paragraph(" "));
+            doc.add(table);
+
+            java.math.BigDecimal sub = toBigDecimalSafe(pago.get("subtotal"));
+            java.math.BigDecimal tot = toBigDecimalSafe(pago.get("totalFinal"));
+            java.math.BigDecimal igv = toBigDecimalSafe(pago.getOrDefault("igv", java.math.BigDecimal.ZERO));
+
+            com.itextpdf.layout.element.Table totTable = new com.itextpdf.layout.element.Table(new float[]{4,2});
+            totTable.setWidthPercent(50).setHorizontalAlignment(com.itextpdf.layout.property.HorizontalAlignment.RIGHT);
+            totTable.addCell("OP. GRAVADAS"); totTable.addCell(sub.toString());
+            totTable.addCell("IGV (" + empresaProperties.getIgvRate().movePointRight(2) + "%)"); totTable.addCell(igv.toString());
+            totTable.addCell(new com.itextpdf.layout.element.Cell().add(new com.itextpdf.layout.element.Paragraph("TOTAL A PAGAR").setBold()));
+            totTable.addCell(new com.itextpdf.layout.element.Cell().add(new com.itextpdf.layout.element.Paragraph(tot.toString()).setBold()));
+            doc.add(new com.itextpdf.layout.element.Paragraph(" "));
+            doc.add(totTable);
+
+            Object letras = pago.getOrDefault("totalEnLetras", "");
+            if (letras != null && !letras.toString().isEmpty()) {
+                doc.add(new com.itextpdf.layout.element.Paragraph("Son: " + letras));
+            }
+
+            // QR
+            try {
+                Object qr = datos.get("pago") instanceof java.util.Map ? ((java.util.Map) datos.get("pago")).get("qrDataUri") : null;
+                if (qr == null) qr = null; // ya se agregó al map principal como 'qrDataUri' en generación de datos
+                Object qrMain = ((java.util.Map)datos.get("pago")).get("qrDataUri");
+                if (qrMain != null && qrMain.toString().startsWith("data:image")) {
+                    String base64 = qrMain.toString().substring(qrMain.toString().indexOf(",")+1);
+                    byte[] bytes = java.util.Base64.getDecoder().decode(base64);
+                    com.itextpdf.layout.element.Image img = new com.itextpdf.layout.element.Image(com.itextpdf.io.image.ImageDataFactory.create(bytes));
+                    img.setWidth(120); img.setHeight(120);
+                    doc.add(img);
+                }
+            } catch (Exception ignore) {}
+            Object hash = ((java.util.Map)datos.get("pago")).get("hash");
+            if (hash != null) doc.add(new com.itextpdf.layout.element.Paragraph("HASH: " + String.valueOf(hash)).setFontSize(9));
+
+            doc.close();
             return os.toByteArray();
         } catch (Exception e) {
             logger.error("Error generando PDF para boleta {}: {}", idAlquiler, e.getMessage(), e);
-            throw new RuntimeException("Error generando PDF de boleta: " + e.getMessage(), e);
+            throw new RuntimeException("Error generando PDF de boleta (iText): " + e.getMessage(), e);
         }
     }
 }

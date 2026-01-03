@@ -36,10 +36,11 @@ const JefeGestionarPromocionesPage = ({ user }) => {
   // Crear
   const crearPromocion = async (nuevaPromocion) => {
     try {
-      const creada = await promocionService.crear(nuevaPromocion);
-      // si backend devuelve la creada, refrescamos la lista para mantener consistencia
+      await promocionService.crear(nuevaPromocion);
       await cargarPromociones();
-      alert('Promoción creada exitosamente');
+      setError('');
+      // Mostrar mensaje no intrusivo
+      window.dispatchEvent(new CustomEvent('toast', { detail: { type: 'success', message: 'Promoción creada' } }));
       return true;
     } catch (error) {
       alert('Error al crear promoción: ' + (error?.response?.data?.message || error.message));
@@ -52,7 +53,7 @@ const JefeGestionarPromocionesPage = ({ user }) => {
     try {
       await promocionService.actualizar(idPromocion, datosActualizados);
       await cargarPromociones();
-      alert('Promoción actualizada exitosamente');
+      window.dispatchEvent(new CustomEvent('toast', { detail: { type: 'success', message: 'Promoción actualizada' } }));
       return true;
     } catch (error) {
       alert('Error al actualizar promoción: ' + (error?.response?.data?.message || error.message));
@@ -83,7 +84,7 @@ const JefeGestionarPromocionesPage = ({ user }) => {
     try {
       await promocionService.eliminar(idPromocion);
       await cargarPromociones();
-      alert('Promoción eliminada exitosamente');
+      window.dispatchEvent(new CustomEvent('toast', { detail: { type: 'success', message: 'Promoción eliminada' } }));
     } catch (error) {
       alert('Error al eliminar promoción: ' + (error?.response?.data?.message || error.message));
     }

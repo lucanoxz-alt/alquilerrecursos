@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import api from './services/api';
+import { disponibilidadService } from '@/services/api';
 
 /*
   HOOK PERSONALIZADO
@@ -31,19 +31,28 @@ export const useDisponibilidad = () => {
     setError(null);
 
     try {
-      // Llamada al backend
-      const response = await api.get('/alquileres/disponibilidad', {
-        params: {
-          recursoId,
-          fechaInicio,
-          fechaFin
-        }
-      });
+      // Calcular duración en horas a partir de fechaInicio/fechaFin si se proveen ambas
+      let duracionHoras = 0;
+      if (fechaInicio && fechaFin) {
+        const ini = new Date(fechaInicio);
+        const fin = new Date(fechaFin);
+        const diffMs = fin - ini;
+        duracionHoras = Math.max(0, Math.round(diffMs / (1000 * 60 * 60)));
+      }
+
+      // Llamada al backend usando el servicio tipado
+      const data = await disponibilidadService.verificarRecurso(
+        recursoId,
+        // El backend espera fechaInicio en formato ISO-8601
+        fechaInicio,
+        // Y la duración en horas
+        duracionHoras
+      );
 
       // Guardamos el resultado
-      setResultado(response.data);
+      setResultado(data);
 
-      return response.data;
+      return data;
 
     } catch (err) {
       console.error('Error al verificar disponibilidad:', err);

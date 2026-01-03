@@ -2,6 +2,7 @@ package com.turismo.alquilerrecursos.model;
 
 import jakarta.persistence.*;
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "DETALLE_ALQUILER")
@@ -18,10 +19,18 @@ public class DetalleAlquiler {
     private String idRecurso;
 
     @Column(name = "horas_realizadas", nullable = false)
+    @Convert(converter = com.turismo.alquilerrecursos.util.IntDecimalConverter.class)
     private Integer horasRealizadas;
 
     @Column(name = "costo_parcial", precision = 10, scale = 2, nullable = false)
     private BigDecimal costoParcial;
+
+    // Nuevos campos para control de devolución y mora
+    @Column(name = "fecha_devolucion_real")
+    private LocalDateTime fechaDevolucionReal;
+
+    @Column(name = "mora_aplicada", precision = 10, scale = 2, nullable = false)
+    private BigDecimal moraAplicada = BigDecimal.ZERO;
 
     public DetalleAlquiler() {}
 
@@ -39,4 +48,10 @@ public class DetalleAlquiler {
 
     public BigDecimal getCostoParcial() { return costoParcial; }
     public void setCostoParcial(BigDecimal costoParcial) { this.costoParcial = costoParcial; }
+
+    public LocalDateTime getFechaDevolucionReal() { return fechaDevolucionReal; }
+    public void setFechaDevolucionReal(LocalDateTime fechaDevolucionReal) { this.fechaDevolucionReal = fechaDevolucionReal; }
+
+    public BigDecimal getMoraAplicada() { return moraAplicada; }
+    public void setMoraAplicada(BigDecimal moraAplicada) { this.moraAplicada = moraAplicada; }
 }

@@ -36,46 +36,6 @@ public class BoletaController {
     }
 
     /**
-     * Generar boleta en formato HTML
-     */
-    @GetMapping("/{idAlquiler}/html")
-    public ResponseEntity<String> generarBoletaHTML(@PathVariable String idAlquiler) {
-        try {
-            String html = boletaService.generarBoletaHTML(idAlquiler);
-            
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.TEXT_HTML);
-            headers.set("Content-Disposition", "inline; filename=\"boleta_" + idAlquiler + ".html\"");
-            
-            return ResponseEntity.ok()
-                    .headers(headers)
-                    .body(html);
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body("<html><body><h1>Error: " + e.getMessage() + "</h1></body></html>");
-        }
-    }
-
-    /**
-     * Descargar boleta como archivo HTML
-     */
-    @GetMapping("/{idAlquiler}/descargar")
-    public ResponseEntity<String> descargarBoleta(@PathVariable String idAlquiler) {
-        try {
-            String html = boletaService.generarBoletaHTML(idAlquiler);
-            
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_OCTET_STREAM);
-            headers.set("Content-Disposition", "attachment; filename=\"boleta_" + idAlquiler + ".html\"");
-            
-            return ResponseEntity.ok()
-                    .headers(headers)
-                    .body(html);
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body("<html><body><h1>Error: " + e.getMessage() + "</h1></body></html>");
-        }
-    }
-
-    /**
      * Generar boleta en PDF
      */
     @GetMapping("/{idAlquiler}/pdf")

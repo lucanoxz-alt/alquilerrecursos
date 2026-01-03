@@ -152,7 +152,7 @@ const TarjetaResumenAlquiler = ({
       </div>
 
       {/* Promoción aplicada */}
-      {promocionAplicada && (
+      {promocionAplicada && calculosAlquiler.totalHoras >= (promocionAplicada.condicionMinimaNum || 0) && (
         <div className="p-3 bg-purple-50 border border-purple-200 rounded-lg">
           <div className="flex items-center text-purple-800 mb-1">
             <Calculator className="w-4 h-4 mr-2" />

@@ -93,12 +93,14 @@ public class JwtAuthFilter extends OncePerRequestFilter {
     private boolean isPublicComprobanteRequest(HttpServletRequest request) {
         String uri = request.getRequestURI();
         if (uri == null) return false;
-        // Permitir acceso público a comprobantes y endpoints relacionados (boleta/factura/xml)
+        // Permitir acceso público a comprobantes y endpoints relacionados (boleta/factura/xml/pdf)
         if (uri.startsWith("/api/comprobantes-pago/")) return true;
-        // /api/alquileres/{id}/ticket | /factura | /xml
-        if (uri.matches("/api/alquileres/.*/(ticket|factura|xml)$")) return true;
-        // fallback permisivo: cualquier endpoint que termine en ticket/factura/xml
-        if (uri.endsWith("/ticket") || uri.endsWith("/factura") || uri.endsWith("/xml")) return true;
+        if (uri.startsWith("/api/comprobantes-pago-reserva/")) return true;
+        if (uri.startsWith("/api/boletas/")) return true;
+        // /api/alquileres/{id}/ticket | /factura | /xml | /pdf
+        if (uri.matches("/api/alquileres/.*/(ticket|factura|xml|pdf)$")) return true;
+        // fallback permisivo: cualquier endpoint que termine en ticket/factura/xml/pdf
+        if (uri.endsWith("/ticket") || uri.endsWith("/factura") || uri.endsWith("/xml") || uri.endsWith("/pdf")) return true;
         return false;
     }
 

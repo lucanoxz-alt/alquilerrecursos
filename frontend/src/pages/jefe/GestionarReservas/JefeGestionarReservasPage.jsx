@@ -41,11 +41,18 @@ const JefeGestionarReservasPage = ({ user, modo }) => {
   }, []);
 
   useEffect(() => {
-    if (!Array.isArray(promosActivas) || promosActivas.length === 0 || totalHoras <= 0) {
+    const totalHorasInt = Number.isFinite(Number(totalHoras)) ? Number(totalHoras) : 0;
+    if (!Array.isArray(promosActivas) || promosActivas.length === 0 || totalHorasInt <= 0 || !selectedResources || selectedResources.length === 0) {
       setPromoAplicable(null);
       return;
     }
-    const elegibles = promosActivas.filter(p => (p.activa !== false) && (parseInt(p.condicionMinima, 10) || 0) <= totalHoras);
+    const elegibles = promosActivas.filter(p => {
+      const activa = p.activa !== false;
+      const condRaw = p.condicionMinima;
+      const cond = Number.parseInt((String(condRaw).match(/\d+/)?.[0] || '0'), 10);
+      const condicionValida = Number.isInteger(cond) && cond >= 1;
+      return activa && condicionValida && totalHorasInt >= cond;
+    });
     if (elegibles.length === 0) {
       setPromoAplicable(null);
       return;
@@ -56,7 +63,7 @@ const JefeGestionarReservasPage = ({ user, modo }) => {
       return pct > bestPct ? p : best;
     }, null);
     setPromoAplicable(mejor);
-  }, [promosActivas, totalHoras]);
+  }, [promosActivas, totalHoras, selectedResources]);
 
   const handleClientSelected = (client) => {
     setSelectedClient(client);
@@ -75,6 +82,22 @@ const JefeGestionarReservasPage = ({ user, modo }) => {
     if (selectedResources.length === 0) { alert('Por favor selecciona al menos un recurso'); return; }
 
     try {
+      // Validación de disponibilidad múltiple justo antes de crear (evita condiciones de carrera)
+      try {
+        const ids = selectedResources.map(r => r.idRecurso);
+        const duracion = selectedResources.reduce((s, r) => s + (parseInt(r.horasSolicitadas, 10) || 1), 0) || 1;
+        const multi = await (await import('../../../services/api')).disponibilidadService.verificarMultiple(ids, fechaHoraInicio, duracion);
+        if (!multi?.todosDisponibles) {
+          const detalles = multi?.detallesPorRecurso || {};
+          const primero = Object.entries(detalles).find(([, msg]) => (msg||'').toLowerCase() !== 'disponible');
+          const msj = primero ? `${primero[0]}: ${primero[1]}` : 'Uno o más recursos no están disponibles en ese horario.';
+          alert('La disponibilidad cambió: ' + msj);
+          return;
+        }
+      } catch (e) {
+        console.warn('No se pudo validar disponibilidad múltiple justo antes de crear', e);
+      }
+
       const reservaData = {
         idTurista: selectedClient.idTurista,
         fechaHoraInicioPrevista: fechaHoraInicio,
@@ -87,7 +110,7 @@ const JefeGestionarReservasPage = ({ user, modo }) => {
         idUsuarioGestor: getCurrentUserId() || undefined,
       };
 
-      const response = await reservaService.crear(reservaData);
+      const reserva = await reservaService.crear(reservaData);
 
       setSelectedClient(null);
       setFechaHoraInicio('');
@@ -96,11 +119,11 @@ const JefeGestionarReservasPage = ({ user, modo }) => {
       alert('Reserva registrada exitosamente');
 
       try {
-        const { data } = await api.get(`/comprobantes-pago-reserva/reserva/${response.data.idReserva}/pdf`, { responseType: 'blob' });
+        const { data } = await api.get(`/comprobantes-pago-reserva/reserva/${reserva.idReserva}/pdf`, { responseType: 'blob' });
         const url = URL.createObjectURL(new Blob([data], { type: 'application/pdf' }));
         const a = document.createElement('a');
         a.href = url;
-        a.download = `comprobante_reserva_${response.data.idReserva}.pdf`;
+        a.download = `comprobante_reserva_${reserva.idReserva}.pdf`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -167,7 +190,7 @@ const JefeGestionarReservasPage = ({ user, modo }) => {
               />
               {!fechaHoraInicio && (
                 <div className="mt-2 text-sm text-gray-600">
-                  <strong>Seleccione la fecha y hora de inicio para ver los recursos disponibles en ese momento.</strong>
+                  <strong>Seleccione la fecha y hora de inicio para ver los recursos disponibles en la fecha seleccionada.</strong>
                 </div>
               )}
             </div>
@@ -193,7 +216,8 @@ const JefeGestionarReservasPage = ({ user, modo }) => {
               promocionAplicada={promoAplicable && {
                 idPromocion: promoAplicable.idPromocion,
                 nombre: promoAplicable.nombre,
-                porcentajeDescuento: parseFloat(promoAplicable.porcentajeDesc || promoAplicable.porcentajeDescuento || 0)
+                porcentajeDescuento: parseFloat(promoAplicable.porcentajeDesc || promoAplicable.porcentajeDescuento || 0),
+                condicionMinimaNum: parseInt(String(promoAplicable.condicionMinima ?? '').match(/\d+/)?.[0] || '0', 10)
               }}
             />
           </div>

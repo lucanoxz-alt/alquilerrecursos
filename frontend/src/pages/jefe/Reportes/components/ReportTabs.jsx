@@ -10,11 +10,11 @@ export default function ReportTabs({ options, activeId, onSelect }) {
           <button
             key={reporte.id}
             onClick={() => onSelect(reporte.id)}
-            className={`flex items-center px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              isActive ? 'bg-blue-100 text-blue-700 border border-blue-200' : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
+            className={`flex items-center rounded-lg border px-4 py-2 text-sm font-medium transition-colors ${
+              isActive ? 'border-blue-200 bg-blue-50 text-blue-700' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
             }`}
           >
-            <Icon className="w-4 h-4 mr-2" />
+            <Icon className="mr-2 h-4 w-4" />
             {reporte.name}
           </button>
         );

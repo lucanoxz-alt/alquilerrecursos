@@ -1,33 +1,64 @@
 import React from 'react';
 import { Mail, Shield, Bell, Save } from 'lucide-react';
+import { Button, Card, CardContent } from '@/components/ui';
 
 export default function NotificacionesSection({ notifications, setNotifications, onSaveNotifications }) {
-  return (
-    <div className="space-y-4 max-w-xl">
-      <div className="flex items-center justify-between border rounded-lg px-4 py-3 hover:bg-gray-50">
-        <div className="flex items-center gap-2">
-          <Mail className="w-4 h-4 text-gray-600" />
-          <span>Notificaciones por correo</span>
+  const Item = ({ icon: Icon, title, description, checked, onChange }) => (
+    <div className="flex items-center justify-between rounded-lg border border-gray-200 px-4 py-3 hover:bg-gray-50">
+      <div className="flex items-start gap-3">
+        <div className="mt-0.5 rounded-md bg-blue-50 p-1.5">
+          <Icon className="h-4 w-4 text-blue-600" />
         </div>
-        <input type="checkbox" checked={!!notifications.email} onChange={(e)=>setNotifications(p=>({...p,email:e.target.checked}))} />
-      </div>
-      <div className="flex items-center justify-between border rounded-lg px-4 py-3 hover:bg-gray-50">
-        <div className="flex items-center gap-2">
-          <Shield className="w-4 h-4 text-gray-600" />
-          <span>Notificaciones por SMS</span>
+        <div>
+          <p className="text-sm font-medium text-gray-900">{title}</p>
+          {description && <p className="text-xs text-gray-500">{description}</p>}
         </div>
-        <input type="checkbox" checked={!!notifications.sms} onChange={(e)=>setNotifications(p=>({...p,sms:e.target.checked}))} />
       </div>
-      <div className="flex items-center justify-between border rounded-lg px-4 py-3 hover:bg-gray-50">
-        <div className="flex items-center gap-2">
-          <Bell className="w-4 h-4 text-gray-600" />
-          <span>Notificaciones push</span>
-        </div>
-        <input type="checkbox" checked={!!notifications.push} onChange={(e)=>setNotifications(p=>({...p,push:e.target.checked}))} />
-      </div>
-      <button onClick={onSaveNotifications} className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-60">
-        <Save className="w-4 h-4" /> Guardar preferencias
-      </button>
+      {/* Switch simple con checkbox accesible */}
+      <label className="relative inline-flex cursor-pointer items-center">
+        <input
+          type="checkbox"
+          className="peer sr-only"
+          checked={!!checked}
+          onChange={(e) => onChange(e.target.checked)}
+          aria-label={title}
+        />
+        <div className="h-5 w-9 rounded-full bg-gray-200 transition peer-checked:bg-blue-600"></div>
+        <div className="pointer-events-none absolute left-0.5 h-4 w-4 translate-x-0 rounded-full bg-white shadow transition peer-checked:translate-x-4"></div>
+      </label>
     </div>
+  );
+
+  return (
+    <Card className="max-w-2xl">
+      <CardContent className="space-y-4 py-5">
+        <Item
+          icon={Mail}
+          title="Notificaciones por correo"
+          description="Recibe confirmaciones y recordatorios en tu email."
+          checked={notifications.email}
+          onChange={(val) => setNotifications((p) => ({ ...p, email: val }))}
+        />
+        <Item
+          icon={Shield}
+          title="Notificaciones por SMS"
+          description="Mensajes de texto para eventos importantes."
+          checked={notifications.sms}
+          onChange={(val) => setNotifications((p) => ({ ...p, sms: val }))}
+        />
+        <Item
+          icon={Bell}
+          title="Notificaciones push"
+          description="Alertas en tu navegador (si están habilitadas)."
+          checked={notifications.push}
+          onChange={(val) => setNotifications((p) => ({ ...p, push: val }))}
+        />
+        <div className="pt-2">
+          <Button variant="success" onClick={onSaveNotifications} className="gap-2">
+            <Save className="h-4 w-4" /> Guardar preferencias
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
   );
 }

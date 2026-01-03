@@ -8,10 +8,11 @@ import {
   CheckCircle, 
   XCircle, 
   AlertCircle,
-  Eye,
   Edit,
   Trash2,
-  RefreshCw
+  RefreshCw,
+  Search,
+  Filter
 } from 'lucide-react';
 
 const ListaReservasRecientes = ({ actualizarLista, onEditarReserva, onVerDetalle }) => {
@@ -19,6 +20,10 @@ const ListaReservasRecientes = ({ actualizarLista, onEditarReserva, onVerDetalle
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [filtroEstado, setFiltroEstado] = useState('todas');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filtrosAbierto, setFiltrosAbierto] = useState(false);
+  const [mostrarIdTurista, setMostrarIdTurista] = useState(false);
+  const [nombreCache, setNombreCache] = useState({});
 
   useEffect(() => {
     cargarReservas();
@@ -30,6 +35,19 @@ const ListaReservasRecientes = ({ actualizarLista, onEditarReserva, onVerDetalle
     try {
       const data = await reservaService.obtenerTodas();
       setReservas(data || []);
+      // Enriquecer nombres si no vienen
+      try {
+        const api = (await import('../../../../services/api'));
+        const { data: turistas } = await api.default.get('/turistas');
+        const mapa = {};
+        (turistas || []).forEach(t => {
+          const nombre = `${t.nombres || ''} ${t.apellidos || ''}`.trim();
+          if (nombre) mapa[t.idTurista] = nombre;
+        });
+        setNombreCache(mapa);
+      } catch (e) {
+        console.warn('No se pudo enriquecer nombres de turistas', e);
+      }
     } catch (error) {
       console.error('Error cargando reservas:', error);
       setError('Error cargando reservas');
@@ -98,8 +116,21 @@ const ListaReservasRecientes = ({ actualizarLista, onEditarReserva, onVerDetalle
   const [openMenuId, setOpenMenuId] = useState(null);
 
   const reservasFiltradas = reservas.filter(reserva => {
-    if (filtroEstado === 'todas') return true;
-    return reserva.estadoreserva === filtroEstado;
+    const passEstado = filtroEstado === 'todas' ? true : (reserva.estadoreserva === filtroEstado);
+    if (!passEstado) return false;
+    if (!searchTerm) return true;
+    const q = searchTerm.toLowerCase().trim();
+    const nombreCacheado = (nombreCache && reserva.idTurista && nombreCache[reserva.idTurista]) ? String(nombreCache[reserva.idTurista]) : '';
+    const nombre = (reserva.nombreTurista || nombreCacheado).toLowerCase();
+    const idTur = String(reserva.idTurista || '').toLowerCase();
+    const estado = String(reserva.estadoreserva || '').toLowerCase();
+    const idReserva = String(reserva.idReserva || '').toLowerCase();
+    return (
+      nombre.includes(q) ||
+      idTur.includes(q) ||
+      estado.includes(q) ||
+      idReserva.includes(q)
+    );
   });
 
   if (loading) {
@@ -123,17 +154,92 @@ const ListaReservasRecientes = ({ actualizarLista, onEditarReserva, onVerDetalle
           </h3>
           
           <div className="flex items-center space-x-3">
-            <select
-              value={filtroEstado}
-              onChange={(e) => setFiltroEstado(e.target.value)}
-              className="px-3 py-1 border border-gray-300 rounded-md text-sm"
+            {/* Buscar general */}
+            <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-3 py-2 w-64 shadow-sm">
+              <Search className="w-4 h-4 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Buscar general..."
+                className="w-full outline-none text-sm text-gray-700 placeholder:text-gray-400"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
+
+            {/* Filtros: desplegable */}
+            <div className="relative">
+              <button
+                onClick={() => setFiltrosAbierto(v => !v)}
+                className="inline-flex items-center gap-2 px-3 py-2 text-sm bg-white border border-gray-200 rounded-xl hover:bg-gray-50 shadow-sm"
+              >
+                <Filter className="w-4 h-4" /> Filtros
+              </button>
+              {filtrosAbierto && (
+                <div className="absolute right-0 mt-2 w-72 bg-white border border-gray-200 rounded-xl shadow-lg z-20 p-2">
+                  <div className="text-sm text-gray-700">
+                    <label className="flex items-center gap-2 px-2 py-1 rounded hover:bg-gray-50 cursor-pointer">
+                      <input type="checkbox" className="accent-blue-600" checked={mostrarIdTurista} onChange={(e)=> setMostrarIdTurista(e.target.checked)} />
+                      Mostrar ID Turista (en lugar de nombre)
+                    </label>
+                    <div className="px-2 py-1 mt-2">
+                      <span className="text-xs text-gray-500">Estado:</span>
+                      <div className="flex flex-wrap gap-2 mt-1">
+                        <button onClick={()=> setFiltroEstado('todas')} className={`px-2 py-0.5 rounded border text-xs ${filtroEstado==='todas'?'bg-blue-50 border-blue-200 text-blue-700':'border-gray-200'}`}>Todas</button>
+                        <button onClick={()=> setFiltroEstado('Pendiente')} className={`px-2 py-0.5 rounded border text-xs ${filtroEstado==='Pendiente'?'bg-blue-50 border-blue-200 text-blue-700':'border-gray-200'}`}>Pendiente</button>
+                        <button onClick={()=> setFiltroEstado('Confirmada')} className={`px-2 py-0.5 rounded border text-xs ${filtroEstado==='Confirmada'?'bg-blue-50 border-blue-200 text-blue-700':'border-gray-200'}`}>Confirmada</button>
+                        <button onClick={()=> setFiltroEstado('Cancelada')} className={`px-2 py-0.5 rounded border text-xs ${filtroEstado==='Cancelada'?'bg-blue-50 border-blue-200 text-blue-700':'border-gray-200'}`}>Cancelada</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Exportar CSV para Excel */}
+            <button
+              onClick={async () => {
+                try {
+                  const filas = reservasFiltradas;
+                  if (!filas || filas.length === 0) return alert('No hay datos para exportar');
+                  const sep = ';';
+                  const headers = ['ID RESERVA','TURISTA','FECHA PREVISTA','ESTADO','COSTO ESTIMADO'];
+                  const rows = [headers.join(sep)];
+                  const esc = (v) => String(v ?? '').replace(/"/g, '""');
+                  filas.forEach(r => {
+                    const fecha = (() => {
+                      const s = r.fechaHoraInicioPrevista;
+                      const m = String(s||'').match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?/);
+                      if (!m) return '';
+                      const [_, y, mo, d, h, mi, se] = m;
+                      const ms = Date.UTC(parseInt(y), parseInt(mo)-1, parseInt(d), parseInt(h), parseInt(mi), parseInt(se||'0')) + (5*60*60*1000);
+                      const date = new Date(ms);
+                      return date.toLocaleString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'America/Lima' });
+                    })();
+                    const turista = mostrarIdTurista ? (r.idTurista) : (r.nombreTurista || nombreCache[r.idTurista] || r.idTurista);
+                    rows.push([
+                      esc(r.idReserva),
+                      '"' + esc(turista) + '"',
+                      '"' + esc(fecha) + '"',
+                      esc(typeof r.costoTotalEstimado === 'number' ? r.costoTotalEstimado.toFixed(2) : (r.costoTotalEstimado || '')),
+                      esc(r.estadoreserva)
+                    ].join(sep));
+                  });
+                  const BOM = '\uFEFF';
+                  const blob = new Blob([BOM + rows.join('\n')], { type: 'text/csv;charset=utf-8;' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a'); a.href = url; a.download = `reservas_${Date.now()}.csv`; document.body.appendChild(a); a.click(); document.body.removeChild(a);
+                  URL.revokeObjectURL(url);
+                } catch (e) {
+                  console.error('Error exportando CSV', e);
+                  alert('No se pudo exportar CSV');
+                }
+              }}
+              className="inline-flex items-center gap-2 px-3 py-2 text-sm bg-white border border-gray-200 rounded-xl hover:bg-gray-50 shadow-sm"
             >
-              <option value="todas">Todas</option>
-              <option value="Pendiente">Pendientes</option>
-              <option value="Confirmada">Confirmadas</option>
-              <option value="Cancelada">Canceladas</option>
-            </select>
-            
+              Exportar
+            </button>
+
+            {/* Actualizar */}
             <Button 
               variant="outline" 
               size="sm" 
@@ -188,9 +294,7 @@ const ListaReservasRecientes = ({ actualizarLista, onEditarReserva, onVerDetalle
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="flex items-center">
                     <User className="w-4 h-4 mr-2 text-gray-400" />
-                    <div className="text-sm text-gray-900">
-                      {reserva.idTurista}
-                    </div>
+                    <div className="text-sm text-gray-900">{mostrarIdTurista ? (reserva.idTurista) : ((reserva.nombreTurista || nombreCache[reserva.idTurista]) || reserva.idTurista)}</div>
                   </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
@@ -209,26 +313,6 @@ const ListaReservasRecientes = ({ actualizarLista, onEditarReserva, onVerDetalle
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                   <div className="flex items-center justify-end space-x-2">
-                    {/* Botón principal: Ticket (Comprobante de Pago Inicial) */}
-                    <button
-                      onClick={async () => {
-                        try {
-                          const api = (await import('../../../../services/api')).default;
-                          const { data } = await api.get(`/comprobantes-pago-reserva/reserva/${reserva.idReserva}/pdf`, { responseType: 'blob' });
-                          const url = URL.createObjectURL(new Blob([data], { type: 'application/pdf' }));
-                          window.open(url, '_blank');
-                          setTimeout(() => URL.revokeObjectURL(url), 60_000);
-                        } catch (err) {
-                          console.error('Error al abrir tiket de reserva', err);
-                          alert('No se pudo abrir el tiket de reserva. ¿Tu sesión sigue activa?');
-                        }
-                      }}
-                      className="inline-flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg bg-blue-600 hover:bg-blue-700 text-white"
-                      title="Ticket (Comprobante de Pago Inicial)"
-                    >
-                      Ticket
-                    </button>
-
                     {/* Botón "Ver más" con menú */}
                     <div className="relative inline-block text-left">
                       <button
@@ -275,46 +359,11 @@ const ListaReservasRecientes = ({ actualizarLista, onEditarReserva, onVerDetalle
                             >
                               Boleta PDF
                             </button>
-                            <button
-                              onClick={async () => {
-                                try {
-                                  setOpenMenuId(null);
-                                  const api = (await import('../../../../services/api')).default;
-                                  const { data } = await api.get(`/comprobantes-pago-reserva/reserva/${reserva.idReserva}/pdf`, { responseType: 'blob' });
-                                  const url = URL.createObjectURL(new Blob([data], { type: 'application/pdf' }));
-                                  const a = document.createElement('a'); a.href = url; a.download = `factura_reserva_${reserva.idReserva}.pdf`; document.body.appendChild(a); a.click(); document.body.removeChild(a);
-                                  setTimeout(() => URL.revokeObjectURL(url), 60_000);
-                                } catch (err) { console.error('Error al descargar Factura PDF de reserva', err); alert('No se pudo descargar la Factura PDF.'); }
-                              }}
-                              className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                            >
-                              Factura PDF
-                            </button>
-                            <button
-                              onClick={async () => {
-                                try {
-                                  setOpenMenuId(null);
-                                  const api = (await import('../../../../services/api')).default;
-                                  // XML de comprobante de reserva no disponible vía este endpoint
-                                  alert('XML no disponible para comprobantes de reserva vía este botón.');
-                                } catch (err) { console.error('Error al descargar XML de reserva', err); alert('No se pudo descargar el XML.'); }
-                              }}
-                              className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                            >
-                              XML
-                            </button>
                           </div>
                         </div>
                       )}
                     </div>
 
-                    <button
-                      onClick={() => onVerDetalle && onVerDetalle(reserva)}
-                      className="text-blue-600 hover:text-blue-900"
-                      title="Ver detalle"
-                    >
-                      <Eye className="w-4 h-4" />
-                    </button>
                   </div>
                 </td>
               </tr>

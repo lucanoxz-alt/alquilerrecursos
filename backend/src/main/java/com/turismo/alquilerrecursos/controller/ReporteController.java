@@ -163,4 +163,18 @@ public class ReporteController {
         Map<String, Object> data = reporteService.obtenerAlquileresPorUsuario(inicio, fin, idUsuarioGestor);
         return ResponseEntity.ok(data);
     }
+
+    /**
+     * Reporte de moras por retraso
+     */
+    @GetMapping("/moras")
+    public ResponseEntity<Map<String,Object>> obtenerMoras(
+            @RequestParam(required = false) String fechaInicio,
+            @RequestParam(required = false) String fechaFin,
+            @RequestParam(required = false) String idAlquiler) {
+        java.time.LocalDateTime inicio = (fechaInicio != null && !fechaInicio.isBlank()) ? java.time.LocalDateTime.parse(fechaInicio) : null;
+        java.time.LocalDateTime fin = (fechaFin != null && !fechaFin.isBlank()) ? java.time.LocalDateTime.parse(fechaFin) : null;
+        Map<String,Object> data = reporteService.obtenerMoras(inicio, fin, idAlquiler);
+        return ResponseEntity.ok(data);
+    }
 }
