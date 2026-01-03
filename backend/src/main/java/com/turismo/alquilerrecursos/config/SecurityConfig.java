@@ -81,6 +81,7 @@ public class SecurityConfig {
                 .requestMatchers("/api/auth/login").permitAll()
                 .requestMatchers("/api/boletas/**", "/api/comprobantes-pago/**", "/api/comprobantes-pago-reserva/**", "/api/comprobantes-electronicos/**").permitAll()
                 .requestMatchers("/api/alquileres/*/ticket").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/alquileres/enriquecidos", "/api/recursos", "/api/turistas").permitAll()
                 .anyRequest().authenticated()
             )
             .authenticationProvider(authenticationProvider())

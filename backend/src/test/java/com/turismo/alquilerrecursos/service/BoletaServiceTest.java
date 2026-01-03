@@ -99,7 +99,7 @@ public class BoletaServiceTest {
     }
 
     @Test
-    public void testGenerarBoletaHTML_containsNumBoleta() {
+    public void testGenerarDatosBoleta_contieneNumBoleta() {
         String id = "ALQ020";
         Alquiler a = new Alquiler();
         a.setIdAlquiler(id);
@@ -139,8 +139,8 @@ public class BoletaServiceTest {
         r.setTarifaHora(new BigDecimal("40.00"));
         when(recursoRepository.findById("R2")).thenReturn(Optional.of(r));
 
-        String html = boletaService.generarBoletaHTML(id);
-        assertNotNull(html);
-        assertTrue(html.contains("B002") || html.contains("Num"), "HTML should contain boleta number or label");
+        var datos = boletaService.generarDatosBoleta(id);
+        assertNotNull(datos);
+        assertTrue(((java.util.Map)datos.get("pago")).get("numBoleta").toString().contains("B002"));
     }
 }

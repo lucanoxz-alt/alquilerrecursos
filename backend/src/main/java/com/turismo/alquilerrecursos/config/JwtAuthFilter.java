@@ -97,6 +97,8 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         if (uri.startsWith("/api/comprobantes-pago/")) return true;
         if (uri.startsWith("/api/comprobantes-pago-reserva/")) return true;
         if (uri.startsWith("/api/boletas/")) return true;
+        if (uri.startsWith("/api/comprobantes-electronicos/")) return true;
+        // Endpoints no utilizados de factura/xml removidos; no es necesario marcarlos pablicos
         // /api/alquileres/{id}/ticket | /factura | /xml | /pdf
         if (uri.matches("/api/alquileres/.*/(ticket|factura|xml|pdf)$")) return true;
         // fallback permisivo: cualquier endpoint que termine en ticket/factura/xml/pdf

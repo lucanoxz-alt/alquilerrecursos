@@ -251,42 +251,24 @@ public class AlquilerController {
         }
         var data = comprobantePagoService.generarDatosComprobantePagoPorAlquiler(idAlquiler);
         data.put("tipo", "TICKET");
-        byte[] pdf = comprobantePagoService.generarPDFDesdeDatos(data);
-        String num = String.valueOf(((java.util.Map)data.get("pago")).get("num"));
+        byte[] pdf = comprobantePagoService.generarTicketPDFDesdeDatos(data);
+        String filename = "TICKET_" + idAlquiler + ".pdf";
         org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
         headers.setContentType(org.springframework.http.MediaType.APPLICATION_PDF);
-        headers.set("Content-Disposition", "attachment; filename=\"TICKET-" + (num != null ? num : idAlquiler) + ".pdf\"");
+        headers.set("Content-Disposition", "attachment; filename=\"" + filename + "\"");
         return ResponseEntity.ok().headers(headers).body(pdf);
     }
 
+    @Deprecated
     @GetMapping("/{idAlquiler}/factura")
     public ResponseEntity<byte[]> verFactura(@PathVariable String idAlquiler) {
-        Alquiler a = alquilerRepository.findById(idAlquiler).orElseThrow(() -> new RuntimeException("Alquiler no encontrado: " + idAlquiler));
-        if (!"Activo".equalsIgnoreCase(a.getEstadoalquiler()) && !"Finalizado".equalsIgnoreCase(a.getEstadoalquiler())) {
-            return ResponseEntity.badRequest().body(null);
-        }
-        var data = comprobantePagoService.generarDatosComprobantePagoPorAlquiler(idAlquiler);
-        data.put("tipo", "FACTURA");
-        byte[] pdf = comprobantePagoService.generarPDFDesdeDatos(data);
-        String num = String.valueOf(((java.util.Map)data.get("pago")).get("num"));
-        org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
-        headers.setContentType(org.springframework.http.MediaType.APPLICATION_PDF);
-        headers.set("Content-Disposition", "attachment; filename=\"FACTURA-" + (num != null ? num : idAlquiler) + ".pdf\"");
-        return ResponseEntity.ok().headers(headers).body(pdf);
+        return ResponseEntity.status(org.springframework.http.HttpStatus.GONE).body(null);
     }
 
+    @Deprecated
     @GetMapping("/{idAlquiler}/xml")
     public ResponseEntity<String> descargarXML(@PathVariable String idAlquiler) {
-        Alquiler a = alquilerRepository.findById(idAlquiler).orElseThrow(() -> new RuntimeException("Alquiler no encontrado: " + idAlquiler));
-        if (!"Activo".equalsIgnoreCase(a.getEstadoalquiler()) && !"Finalizado".equalsIgnoreCase(a.getEstadoalquiler())) {
-            return ResponseEntity.badRequest().body("Alquiler no autorizado para generar comprobante");
-        }
-        var data = comprobantePagoService.generarDatosComprobantePagoPorAlquiler(idAlquiler);
-        String xml = comprobantePagoService.generarXMLDesdeDatos(data);
-        org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
-        headers.setContentType(org.springframework.http.MediaType.APPLICATION_XML);
-        headers.set("Content-Disposition", "attachment; filename=\"COMPROBANTE-" + idAlquiler + ".xml\"");
-        return ResponseEntity.ok().headers(headers).body(xml);
+        return ResponseEntity.status(org.springframework.http.HttpStatus.GONE).body("Endpoint XML deshabilitado");
     }
 
     /**

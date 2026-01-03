@@ -28,8 +28,8 @@ api.interceptors.request.use(
     const url = config.url || '';
     const urlPath = (url || '').split('?')[0];
     // No enviar Authorization en endpoints públicos de comprobantes
-    const publicRegex = /\/alquileres\/[^/]+\/(ticket|factura|xml|pdf)$/;
-    const isPublicComprobante = publicRegex.test(urlPath) || urlPath.includes('/comprobantes-pago/') || urlPath.includes('/boletas/');
+    const publicRegex = /\/alquileres\/[^/]+\/(ticket|pdf)$/;
+    const isPublicComprobante = publicRegex.test(urlPath) || urlPath.includes('/comprobantes-pago/') || urlPath.includes('/boletas/') || urlPath.includes('/comprobantes-electronicos/');
     if (token && !isPublicComprobante) {
       config.headers = config.headers || {};
       config.headers.Authorization = `Bearer ${token}`;

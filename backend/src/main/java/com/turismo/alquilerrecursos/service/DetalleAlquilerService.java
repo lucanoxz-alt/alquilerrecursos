@@ -19,6 +19,7 @@ public class DetalleAlquilerService {
     @Autowired private DetalleAlquilerRepository detalleAlquilerRepository;
     @Autowired private RecursoRepository recursoRepository;
     @Autowired private PagoRepository pagoRepository;
+    @Autowired private DetalleReservaRepository detalleReservaRepository;
 
     public static class FinalizarRecursoRequest {
         public String idDetalle;
@@ -39,6 +40,28 @@ public class DetalleAlquilerService {
         Alquiler a = alquilerRepository.findById(idAlquiler)
                 .orElseThrow(() -> new RuntimeException("Alquiler no encontrado: " + idAlquiler));
         List<DetalleAlquiler> detalles = detalleAlquilerRepository.findByIdAlquiler(idAlquiler);
+        // Si no hay detalles (caso alquiler creado desde reserva pero no se sincronizaron detalles), reconstruir desde la reserva
+        if (detalles == null || detalles.isEmpty()) {
+            if (a.getIdReserva() != null) {
+                List<DetalleReserva> drs = detalleReservaRepository.findByIdReserva(a.getIdReserva());
+                java.util.List<DetalleAlquiler> reconstruidos = new java.util.ArrayList<>();
+                for (DetalleReserva dr : drs) {
+                    // Crear un detalle virtual en memoria (no persistimos) para poder mostrar en UI
+                    DetalleAlquiler d = new DetalleAlquiler();
+                    d.setIdDetalle("VRT-" + dr.getIdRecurso());
+                    d.setIdAlquiler(idAlquiler);
+                    d.setIdRecurso(dr.getIdRecurso());
+                    d.setHorasRealizadas(dr.getHorasSolicitadas());
+                    Recurso rec = recursoRepository.findById(dr.getIdRecurso()).orElse(null);
+                    d.setCostoParcial((rec != null ? rec.getTarifaHora() : java.math.BigDecimal.ZERO)
+                            .multiply(java.math.BigDecimal.valueOf(dr.getHorasSolicitadas())));
+                    reconstruidos.add(d);
+                }
+                if (!reconstruidos.isEmpty()) {
+                    detalles = reconstruidos;
+                }
+            }
+        }
         List<Map<String,Object>> out = new ArrayList<>();
         for (DetalleAlquiler d : detalles) {
             Recurso r = recursoRepository.findById(d.getIdRecurso()).orElse(null);
@@ -48,7 +71,7 @@ public class DetalleAlquilerService {
             m.put("idRecurso", d.getIdRecurso());
             m.put("nombreRecurso", r != null ? r.getNombre() : d.getIdRecurso());
             String estadoFisico = r != null ? r.getEstado() : null;
-            String estadoLogico = d.getFechaDevolucionReal() != null ? "Devuelto" : estadoFisico;
+            String estadoLogico = d.getFechaDevolucionReal() != null ? "Devuelto" : (estadoFisico != null ? estadoFisico : "Alquilado");
             m.put("estadoRecurso", estadoFisico);
             m.put("estadoLogicoRecurso", estadoLogico);
             m.put("horaTeoricaDevolucion", horaTeoricaFin);
@@ -111,8 +134,8 @@ public class DetalleAlquilerService {
         List<DetalleAlquiler> todos = detalleAlquilerRepository.findByIdAlquiler(idAlquiler);
         boolean todosFinalizados = todos.stream().allMatch(x -> x.getFechaDevolucionReal() != null);
         if (todosFinalizados) {
-            // Marcar alquiler como Finalizado
-            alquilerRepository.updateEstadoAlquiler(idAlquiler, "Finalizado");
+            // NO finalizar automáticamente el alquiler; la finalización debe ser manual vía endpoint específico.
+            // alquilerRepository.updateEstadoAlquiler(idAlquiler, "Finalizado");
 
             BigDecimal totalMora = todos.stream()
                     .map(DetalleAlquiler::getMoraAplicada)

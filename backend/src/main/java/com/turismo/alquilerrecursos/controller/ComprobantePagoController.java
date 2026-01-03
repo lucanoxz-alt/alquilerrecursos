@@ -48,4 +48,15 @@ public class ComprobantePagoController {
         headers.set("Content-Disposition", "attachment; filename=\"comprobante_"+idAlquiler+".pdf\"");
         return ResponseEntity.ok().headers(headers).body(pdf);
     }
+
+    @GetMapping("/alquiler/{idAlquiler}/mora/pdf")
+    public ResponseEntity<byte[]> pdfMoraPorAlquiler(@PathVariable String idAlquiler) {
+        logger.info("Solicitud PDF comprobante de mora por alquiler: {} (Authorization: {})", idAlquiler, "[omitted]");
+        Map<String,Object> data = service.generarDatosComprobanteMoraPorAlquiler(idAlquiler);
+        byte[] pdf = service.generarPDFDesdeDatos(data);
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_PDF);
+        headers.set("Content-Disposition", "attachment; filename=\"comprobante_mora_"+idAlquiler+".pdf\"");
+        return ResponseEntity.ok().headers(headers).body(pdf);
+    }
 }

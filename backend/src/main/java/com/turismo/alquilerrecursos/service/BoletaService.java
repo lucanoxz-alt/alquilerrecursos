@@ -9,6 +9,9 @@ import com.turismo.alquilerrecursos.repository.PagoRepository;
 import com.turismo.alquilerrecursos.repository.TuristaRepository;
 import com.turismo.alquilerrecursos.repository.DetalleAlquilerRepository;
 import com.turismo.alquilerrecursos.repository.RecursoRepository;
+import com.turismo.alquilerrecursos.repository.UsuarioRepository;
+import com.turismo.alquilerrecursos.repository.PromocionRepository;
+import com.turismo.alquilerrecursos.model.Usuario;
 import com.turismo.alquilerrecursos.model.Recurso;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -24,6 +27,9 @@ import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
 import java.util.HashMap;
+
+import com.itextpdf.layout.properties.HorizontalAlignment;
+import com.itextpdf.layout.properties.UnitValue;
 
 @Service
 public class BoletaService {
@@ -46,7 +52,13 @@ public class BoletaService {
     private RecursoRepository recursoRepository;
 
     @Autowired
+    private UsuarioRepository usuarioRepository;
+
+    @Autowired
     private EmpresaProperties empresaProperties;
+
+    @Autowired
+    private PromocionRepository promocionRepository;
 
     /**
      * Generar datos de boleta para un alquiler
@@ -83,6 +95,7 @@ public class BoletaService {
         // Datos del alquiler
         Map<String, Object> datosAlquiler = new HashMap<>();
         datosAlquiler.put("id", alquiler.getIdAlquiler());
+        datosAlquiler.put("idReserva", alquiler.getIdReserva());
         datosAlquiler.put("fechaInicio", alquiler.getFechaHoraInicio() != null ? alquiler.getFechaHoraInicio().format(formatter) : "N/D");
         datosAlquiler.put("duracionHoras", alquiler.getDuracionHoras());
         LocalDateTime fechaFinCalc = alquiler.getFechaHoraFin();
@@ -91,7 +104,8 @@ public class BoletaService {
         }
         datosAlquiler.put("fechaFin", fechaFinCalc != null ? fechaFinCalc.format(formatter) : "");
         datosAlquiler.put("estado", alquiler.getEstadoalquiler() != null ? alquiler.getEstadoalquiler() : "N/D");
-        datosAlquiler.put("idVendedor", alquiler.getIdUsuarioGestor() != null ? alquiler.getIdUsuarioGestor() : "");
+        String idVendedor = alquiler.getIdUsuarioGestor();
+        datosAlquiler.put("idVendedor", idVendedor != null ? idVendedor : "");
         
         // Datos del turista
         Map<String, Object> datosTurista = new HashMap<>();
@@ -122,6 +136,21 @@ public class BoletaService {
             datosPago.put("subtotal", gravadas);
             datosPago.put("igv", igv);
             datosPago.put("totalEnLetras", NumeroALetrasUtil.aMonedaPeru(totalFinal));
+            // Detalle de descuento (opcional)
+            if (pago.getDescuentoAplicado() != null && pago.getDescuentoAplicado().compareTo(java.math.BigDecimal.ZERO) > 0) {
+                Map<String,Object> d = new HashMap<>();
+                try {
+                    String idProm = alquiler.getIdPromocion();
+                    if (idProm != null) {
+                        var prom = promocionRepository.findById(idProm).orElse(null);
+                        if (prom != null) {
+                            d.put("descripcion", prom.getNombre() != null && !prom.getNombre().isBlank() ? prom.getNombre() : prom.getDescripcion());
+                        }
+                    }
+                } catch (Exception ignored) {}
+                d.put("monto", pago.getDescuentoAplicado());
+                datosPago.put("descuentoDetalle", d);
+            }
             // QR y hash
             String qrContent = "ALQ:"+idAlquiler+"|BOLETA:"+(pago.getNumBoleta() != null ? pago.getNumBoleta() : "N/D")+"|TOTAL:"+totalFinal;
             try {
@@ -181,7 +210,8 @@ public class BoletaService {
         try (java.io.ByteArrayOutputStream os = new java.io.ByteArrayOutputStream()) {
             com.itextpdf.kernel.pdf.PdfWriter writer = new com.itextpdf.kernel.pdf.PdfWriter(os);
             com.itextpdf.kernel.pdf.PdfDocument pdf = new com.itextpdf.kernel.pdf.PdfDocument(writer);
-            com.itextpdf.layout.Document doc = new com.itextpdf.layout.Document(pdf);
+            com.itextpdf.layout.Document doc = new com.itextpdf.layout.Document(pdf, com.itextpdf.kernel.geom.PageSize.A4.rotate());
+            doc.setMargins(36, 36, 36, 36);
 
             Map<String,Object> empresa = (Map<String,Object>) datos.get("empresa");
             Map<String,Object> alquiler = (Map<String,Object>) datos.get("alquiler");
@@ -189,24 +219,40 @@ public class BoletaService {
             Map<String,Object> pago = (Map<String,Object>) datos.get("pago");
             java.util.List<com.turismo.alquilerrecursos.model.DetalleAlquiler> detalles = (java.util.List<com.turismo.alquilerrecursos.model.DetalleAlquiler>) datos.get("detalles");
 
-            doc.add(new com.itextpdf.layout.element.Paragraph(String.valueOf(empresa.get("nombre"))).setBold().setFontSize(14));
-            doc.add(new com.itextpdf.layout.element.Paragraph("RUC " + String.valueOf(empresa.get("ruc"))));
-            doc.add(new com.itextpdf.layout.element.Paragraph(String.valueOf(empresa.get("direccion"))));
-            doc.add(new com.itextpdf.layout.element.Paragraph(String.valueOf(empresa.get("telefono")) + " | " + String.valueOf(empresa.get("email"))));
-
-            doc.add(new com.itextpdf.layout.element.Paragraph(" "));
-            doc.add(new com.itextpdf.layout.element.Paragraph("BOLETA").setBold());
+            // Encabezado compacto con logo y datos empresa
+            com.itextpdf.layout.element.Table header = new com.itextpdf.layout.element.Table(new float[]{1,6}).setWidth(UnitValue.createPercentValue(100f));
+            try {
+                com.itextpdf.io.image.ImageData logoData = com.itextpdf.io.image.ImageDataFactory.create(getClass().getResource("/static/favicon-96x96.png"));
+                com.itextpdf.layout.element.Image logo = new com.itextpdf.layout.element.Image(logoData).scaleToFit(50, 50);
+                header.addCell(new com.itextpdf.layout.element.Cell().setBorder(com.itextpdf.layout.borders.Border.NO_BORDER).add(logo));
+            } catch (Exception e) {
+                header.addCell(new com.itextpdf.layout.element.Cell().setBorder(com.itextpdf.layout.borders.Border.NO_BORDER));
+            }
+            com.itextpdf.layout.element.Paragraph datosEmp = new com.itextpdf.layout.element.Paragraph()
+                .add(new com.itextpdf.layout.element.Text(String.valueOf(empresa.get("nombre"))).setBold().setFontSize(12)).add("\n")
+                .add("RUC "+String.valueOf(empresa.get("ruc"))).add("\n")
+                .add(String.valueOf(empresa.get("direccion"))).add("\n")
+                .add(String.valueOf(empresa.get("telefono"))+" | "+String.valueOf(empresa.get("email")));
+            header.addCell(new com.itextpdf.layout.element.Cell().setBorder(com.itextpdf.layout.borders.Border.NO_BORDER).add(datosEmp));
+            doc.add(header);
+            doc.add(new com.itextpdf.layout.element.Paragraph("BOLETA ELECTRÓNICA").setBold());
             doc.add(new com.itextpdf.layout.element.Paragraph("N° " + String.valueOf(pago.get("numBoleta"))));
 
             doc.add(new com.itextpdf.layout.element.Paragraph("Cliente: " + String.valueOf(turista.get("nombres")) + " " + String.valueOf(turista.get("apellidos"))));
             doc.add(new com.itextpdf.layout.element.Paragraph("DNI/RUC: " + String.valueOf(turista.get("documento"))));
             doc.add(new com.itextpdf.layout.element.Paragraph("Fecha emisión: " + String.valueOf(pago.get("fechaEmision"))));
-            doc.add(new com.itextpdf.layout.element.Paragraph("Orden compra: " + String.valueOf(alquiler.get("id"))));
-            doc.add(new com.itextpdf.layout.element.Paragraph("ID Vendedor: " + String.valueOf(alquiler.getOrDefault("idVendedor",""))));
+            doc.add(new com.itextpdf.layout.element.Paragraph("Orden de Alquiler: " + String.valueOf(alquiler.get("id"))));
+            if (alquiler.get("idReserva") != null && !String.valueOf(alquiler.get("idReserva")).isBlank()) {
+                doc.add(new com.itextpdf.layout.element.Paragraph("ID Reserva: " + String.valueOf(alquiler.get("idReserva"))));
+            }
+            if (alquiler.get("idVendedor") != null && !String.valueOf(alquiler.get("idVendedor")).isBlank()) {
+                doc.add(new com.itextpdf.layout.element.Paragraph("ID Vendedor: " + String.valueOf(alquiler.get("idVendedor"))));
+            }
+            doc.add(new com.itextpdf.layout.element.Paragraph("Método de pago: " + String.valueOf(pago.getOrDefault("metodoPago",""))));
 
-            com.itextpdf.layout.element.Table table = new com.itextpdf.layout.element.Table(new float[]{1,2,5,2,2,2}).setWidthPercent(100);
+            com.itextpdf.layout.element.Table table = new com.itextpdf.layout.element.Table(new float[]{1,2,5,2,2,2}).setWidth(UnitValue.createPercentValue(100f));
             table.addHeaderCell(new com.itextpdf.layout.element.Cell().add(new com.itextpdf.layout.element.Paragraph("CANT.").setBold()));
-            table.addHeaderCell(new com.itextpdf.layout.element.Cell().add(new com.itextpdf.layout.element.Paragraph("UNIDAD").setBold()));
+            table.addHeaderCell(new com.itextpdf.layout.element.Cell().add(new com.itextpdf.layout.element.Paragraph("HORA").setBold()));
             table.addHeaderCell(new com.itextpdf.layout.element.Cell().add(new com.itextpdf.layout.element.Paragraph("DESCRIPCIÓN").setBold()));
             table.addHeaderCell(new com.itextpdf.layout.element.Cell().add(new com.itextpdf.layout.element.Paragraph("P. UNIT.").setBold()));
             table.addHeaderCell(new com.itextpdf.layout.element.Cell().add(new com.itextpdf.layout.element.Paragraph("DTO.").setBold()));
@@ -223,22 +269,22 @@ public class BoletaService {
                 table.addCell("0");
                 table.addCell(String.valueOf(d.getCostoParcial()));
             }
-            doc.add(new com.itextpdf.layout.element.Paragraph(" "));
-            doc.add(table);
-
             java.math.BigDecimal sub = toBigDecimalSafe(pago.get("subtotal"));
             java.math.BigDecimal tot = toBigDecimalSafe(pago.get("totalFinal"));
             java.math.BigDecimal igv = toBigDecimalSafe(pago.getOrDefault("igv", java.math.BigDecimal.ZERO));
 
             com.itextpdf.layout.element.Table totTable = new com.itextpdf.layout.element.Table(new float[]{4,2});
-            totTable.setWidthPercent(50).setHorizontalAlignment(com.itextpdf.layout.property.HorizontalAlignment.RIGHT);
+            totTable.setWidth(UnitValue.createPercentValue(50f)).setHorizontalAlignment(HorizontalAlignment.RIGHT);
+            Object descDet = ((java.util.Map)pago).get("descuentoDetalle");
+            if (descDet instanceof java.util.Map) {
+                java.util.Map d = (java.util.Map) descDet;
+                String dLabel = "Descuento" + (d.get("descripcion") != null ? (" ("+String.valueOf(d.get("descripcion"))+")") : "");
+                totTable.addCell(dLabel); totTable.addCell("-" + String.valueOf(d.get("monto")));
+            }
             totTable.addCell("OP. GRAVADAS"); totTable.addCell(sub.toString());
             totTable.addCell("IGV (" + empresaProperties.getIgvRate().movePointRight(2) + "%)"); totTable.addCell(igv.toString());
             totTable.addCell(new com.itextpdf.layout.element.Cell().add(new com.itextpdf.layout.element.Paragraph("TOTAL A PAGAR").setBold()));
             totTable.addCell(new com.itextpdf.layout.element.Cell().add(new com.itextpdf.layout.element.Paragraph(tot.toString()).setBold()));
-            doc.add(new com.itextpdf.layout.element.Paragraph(" "));
-            doc.add(totTable);
-
             Object letras = pago.getOrDefault("totalEnLetras", "");
             if (letras != null && !letras.toString().isEmpty()) {
                 doc.add(new com.itextpdf.layout.element.Paragraph("Son: " + letras));

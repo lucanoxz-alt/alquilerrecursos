@@ -263,16 +263,17 @@ const cargarDisponibilidad = async () => {
                               <div className={`text-xs mt-1 ${disponible ? 'text-green-700' : 'text-red-700'}`}>
                                 {(() => {
                                   if (disponible) return '✅ Disponible ahora';
+                                  const baseEstado = (det.estadoDisponibilidad || '').toLowerCase();
+                                  const conflict = baseEstado.includes('reserv') ? 'Reservado' : (baseEstado.includes('alquil') ? 'Alquilado' : 'No disponible');
                                   const hora = det.horaDisponible ? new Date(det.horaDisponible) : null;
-                                  if (!hora) return '⛔ No disponible';
+                                  if (!hora) {
+                                    return `⛔ ${conflict === 'No disponible' ? 'No disponible en la franja seleccionada' : `${conflict} en la franja seleccionada`}`;
+                                  }
                                   const desde = new Date(fechaInicio);
                                   const diffMs = Math.max(0, hora - desde);
                                   const min = Math.round(diffMs / 60000);
                                   const h = Math.floor(min / 60);
                                   const m = min % 60;
-                                  // Etiqueta específica según conflicto
-                                  const baseEstado = (det.estadoDisponibilidad || '').toLowerCase();
-                                  const conflict = baseEstado.includes('reserv') ? 'Reservado' : (baseEstado.includes('alquil') ? 'Alquilado' : 'No disponible');
                                   return `⛔ ${conflict} hasta ${hora.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} (${h > 0 ? h + 'h ' : ''}${m}min)`;
                                 })()}
                               </div>

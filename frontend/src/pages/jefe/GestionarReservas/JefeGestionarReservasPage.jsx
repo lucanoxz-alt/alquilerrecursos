@@ -204,7 +204,7 @@ const JefeGestionarReservasPage = ({ user, modo }) => {
               />
             )}
 
-            <SeleccionMetodoPago onSubmit={handleSubmitReserva} modo={modo} />
+            <SeleccionMetodoPago onSubmit={handleSubmitReserva} modo={modo} submitLabel="Registrar Reserva" />
           </div>
 
           <div className="bg-blue-50 rounded-xl p-6 h-fit">

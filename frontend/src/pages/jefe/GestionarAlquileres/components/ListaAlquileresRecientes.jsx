@@ -127,6 +127,17 @@ const cargar = async () => {
     if (actualizarLista > 0) cargar();
   }, [actualizarLista]);
 
+  useEffect(() => {
+    const handler = () => cargar();
+    const storageHandler = (e) => { if (e.key === 'triggerRefreshAlquileres') cargar(); };
+    window.addEventListener('refreshAlquileres', handler);
+    window.addEventListener('storage', storageHandler);
+    return () => {
+      window.removeEventListener('refreshAlquileres', handler);
+      window.removeEventListener('storage', storageHandler);
+    };
+  }, []);
+
   const rowsFiltradas = useMemo(() => {
     let base = alquileres;
     if (searchTerm) {
@@ -264,30 +275,28 @@ const cargar = async () => {
                         onClick={async () => {
                           const id = r.idAlquiler;
                           try {
-                            const { data } = await api.get(`/alquileres/${id}/ticket`, { responseType: 'blob' });
+                            const { data } = await api.get(`/alquileres/${id}/ticket`, { responseType: 'blob', headers: { Accept: 'application/pdf' } });
                           const url = URL.createObjectURL(new Blob([data], { type: 'application/pdf' }));
-                          window.open(url, '_blank');
+                          const a = document.createElement('a'); a.href = url; a.download = `TICKET_${id}.pdf`; document.body.appendChild(a); a.click(); document.body.removeChild(a);
                           setTimeout(() => URL.revokeObjectURL(url), 60_000);
                           } catch (err) {
                             console.warn('Error al abrir boleta (PDF)', err);
                             const status = err?.response?.status;
                             if (status === 401) {
-                              alert('No se pudo descargar la boleta. Inténtalo nuevamente o verifique permisos.');
-                              window.location.href = '/login';
+                              alert('No se pudo descargar el comprobante. Inténtalo nuevamente o verifique permisos.');
                               return;
                             }
                             // Try comprobante-pago as last resort
                             try {
                               const { data } = await api.get(`/comprobantes-pago/alquiler/${id}/pdf`, { responseType: 'blob', headers: { Accept: 'application/pdf' } });
                               const url = URL.createObjectURL(new Blob([data], { type: 'application/pdf' }));
-                              window.open(url, '_blank');
+                              const a = document.createElement('a'); a.href = url; a.download = `TICKET_${id}.pdf`; document.body.appendChild(a); a.click(); document.body.removeChild(a);
                               setTimeout(() => URL.revokeObjectURL(url), 60_000);
                               return;
                             } catch (err3) {
                               console.error('Todos los intentos fallaron', err, err3);
                               if (err3?.response?.status === 401) {
-                                alert('Tu sesión expiró. Por favor inicia sesión.');
-                                window.location.href = '/login';
+                                alert('No se pudo descargar el comprobante. Inténtalo nuevamente o verifique permisos.');
                                 return;
                               }
                             }
@@ -421,7 +430,8 @@ const cargar = async () => {
                    try {
                      const payload = { idDetalle: modalFinalizar.idDetalle, fechaDevolucionReal: modalFinalizar.fecha, estadoFinal: modalFinalizar.estadoFinal, metodoPago: modalFinalizar.esUltimo ? modalFinalizar.metodoPago : undefined };
                      const resp = await alquilerServiceExtended.finalizarRecurso(modalFinalizar.idAlquiler, payload);
-                     if (resp.moraTotal && resp.detallesMora && resp.detallesMora.length > 0) {
+                     const moraLen = Array.isArray(resp.detallesMora) ? resp.detallesMora.length : 0;
+if (resp.moraTotal && resp.detallesMora && ((moraLen === 1) || (moraLen > 1 && modalFinalizar.esUltimo))) {
                        setModalMora({ abierto:true, idAlquiler: modalFinalizar.idAlquiler, boleta: null, moraTotal: resp.moraTotal, detalles: resp.detallesMora, metodoPago: 'Efectivo' });
                      }
                      setModalFinalizar({ abierto: false, idAlquiler: null, idDetalle: null, fecha: '', estadoFinal: 'Disponible', esUltimo:false, metodoPago:'Efectivo' });
@@ -439,76 +449,72 @@ const cargar = async () => {
          </div>
        </div>
      )}
+
+     {/* Modal Pago de Mora */}
+     {modalMora.abierto && (
+       <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+         <div className="bg-white rounded-xl shadow-lg w-full max-w-lg p-6">
+           <div className="flex justify-between items-center mb-4">
+             <h4 className="text-lg font-semibold">Pago de mora</h4>
+             <button onClick={() => setModalMora({ abierto:false, idAlquiler:null, boleta:null, moraTotal:0, detalles:[] })} className="text-gray-500 hover:text-gray-700">✕</button>
+           </div>
+           <div className="max-h-[60vh] overflow-y-auto">
+             <table className="w-full text-sm border">
+               <thead>
+                 <tr className="bg-gray-50">
+                   <th className="p-2 text-left">Recurso</th>
+                   <th className="p-2 text-right">Minutos</th>
+                   <th className="p-2 text-right">Mora (S/.)</th>
+                 </tr>
+               </thead>
+               <tbody>
+                 {modalMora.detalles.map((d,i) => (
+                   <tr key={i} className="border-t">
+                     <td className="p-2">{d.nombreRecurso}</td>
+                     <td className="p-2 text-right">{d.minutosExtra}</td>
+                     <td className="p-2 text-right">{Number(d.moraAplicada||0).toFixed(2)}</td>
+                   </tr>
+                 ))}
+               </tbody>
+             </table>
+             <div className="flex justify-between items-center mt-4">
+               <div className="text-gray-700 font-medium">Total a pagar:</div>
+               <div className="text-gray-900 font-bold">S/. {Number(modalMora.moraTotal||0).toFixed(2)}</div>
+             </div>
+             <div className="mt-4">
+               <label className="block text-sm text-gray-700 mb-1">Método de pago</label>
+               <select value={modalMora.metodoPago||'Efectivo'} onChange={(e)=> setModalMora(v=>({...v, metodoPago: e.target.value}))} className="w-full border border-gray-300 rounded-lg px-3 py-2">
+                 <option>Efectivo</option>
+                 <option>Tarjeta</option>
+                 <option>Yape</option>
+                 <option>Transferencia</option>
+               </select>
+             </div>
+             <div className="flex justify-end gap-2 mt-6">
+               <button onClick={() => setModalMora({ abierto:false, idAlquiler:null, boleta:null, moraTotal:0, detalles:[] })} className="px-4 py-2 rounded-lg border">Cancelar</button>
+               <button onClick={async ()=>{
+                 try {
+                   const { data } = await api.post(`/alquileres/${modalMora.idAlquiler}/registrar-mora`, { metodoPago: modalMora.metodoPago||'Efectivo' });
+                   // Comprobante de mora registrado; abrimos PDF automáticamente
+                   try {
+                     const pdf = await api.get(`/comprobantes-pago/alquiler/${modalMora.idAlquiler}/mora/pdf`, { responseType: 'blob' });
+                     const url = URL.createObjectURL(new Blob([pdf.data], { type: 'application/pdf' }));
+                     window.open(url, '_blank');
+                     setTimeout(()=>URL.revokeObjectURL(url), 60_000);
+                   } catch {}
+                   setModalMora({ abierto:false, idAlquiler:null, boleta:null, moraTotal:0, detalles:[] });
+                   cargar();
+                 } catch (e) {
+                   alert(e?.response?.data?.error || 'No se pudo registrar el pago de mora');
+                 }
+               }} className="px-4 py-2 rounded-lg bg-blue-600 text-white">Registrar pago de mora</button>
+             </div>
+           </div>
+         </div>
+       </div>
+     )}
+
    </div>
-  );
-};
-
-      {/* Modal Pago de Mora */}
-      {modalMora.abierto && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-lg w-full max-w-lg p-6">
-            <div className="flex justify-between items-center mb-4">
-              <h4 className="text-lg font-semibold">Pago de mora</h4>
-              <button onClick={() => setModalMora({ abierto:false, idAlquiler:null, boleta:null, moraTotal:0, detalles:[] })} className="text-gray-500 hover:text-gray-700">✕</button>
-            </div>
-            <div className="max-h-[60vh] overflow-y-auto">
-              <table className="w-full text-sm border">
-                <thead>
-                  <tr className="bg-gray-50">
-                    <th className="p-2 text-left">Recurso</th>
-                    <th className="p-2 text-right">Minutos</th>
-                    <th className="p-2 text-right">Mora (S/.)</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {modalMora.detalles.map((d,i) => (
-                    <tr key={i} className="border-t">
-                      <td className="p-2">{d.nombreRecurso}</td>
-                      <td className="p-2 text-right">{d.minutosExtra}</td>
-                      <td className="p-2 text-right">{Number(d.moraAplicada||0).toFixed(2)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              <div className="flex justify-between items-center mt-4">
-                <div className="text-gray-700 font-medium">Total a pagar:</div>
-                <div className="text-gray-900 font-bold">S/. {Number(modalMora.moraTotal||0).toFixed(2)}</div>
-              </div>
-              <div className="mt-4">
-                <label className="block text-sm text-gray-700 mb-1">Método de pago</label>
-                <select value={modalMora.metodoPago||'Efectivo'} onChange={(e)=> setModalMora(v=>({...v, metodoPago: e.target.value}))} className="w-full border border-gray-300 rounded-lg px-3 py-2">
-                  <option>Efectivo</option>
-                  <option>Tarjeta</option>
-                  <option>Yape</option>
-                  <option>Transferencia</option>
-                </select>
-              </div>
-              <div className="flex justify-end gap-2 mt-6">
-                <button onClick={() => setModalMora({ abierto:false, idAlquiler:null, boleta:null, moraTotal:0, detalles:[] })} className="px-4 py-2 rounded-lg border">Cancelar</button>
-                <button onClick={async ()=>{
-                  try {
-                    const { data } = await api.post(`/alquileres/${modalMora.idAlquiler}/registrar-mora`, { metodoPago: modalMora.metodoPago||'Efectivo' });
-                    alert(`Pago de mora registrado. Comprobante: ${data.boletaMora}`);
-                    // Abrir PDF del comprobante
-                    try {
-                      const pdf = await api.get(`/comprobantes-pago/alquiler/${modalMora.idAlquiler}/pdf`, { responseType: 'blob' });
-                      const url = URL.createObjectURL(new Blob([pdf.data], { type: 'application/pdf' }));
-                      window.open(url, '_blank');
-                      setTimeout(()=>URL.revokeObjectURL(url), 60_000);
-                    } catch {}
-                    setModalMora({ abierto:false, idAlquiler:null, boleta:null, moraTotal:0, detalles:[] });
-                    cargar();
-                  } catch (e) {
-                    alert(e?.response?.data?.error || 'No se pudo registrar el pago de mora');
-                  }
-                }} className="px-4 py-2 rounded-lg bg-blue-600 text-white">Registrar pago de mora</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      </div>
   );
 };
 

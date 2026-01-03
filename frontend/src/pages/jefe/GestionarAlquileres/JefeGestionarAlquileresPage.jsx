@@ -93,14 +93,20 @@ const JefeGestionarAlquileresPage = ({ user, modo }) => {
 
       if (response?.data?.idAlquiler) {
         const id = response.data.idAlquiler;
-        const openBlobInTab = (blobData) => {
+        const openBlobDownload = (blobData, filename) => {
           const url = URL.createObjectURL(new Blob([blobData], { type: 'application/pdf' }));
-          window.open(url, '_blank', 'width=800,height=600,scrollbars=yes');
+          const a = document.createElement('a'); a.href = url; a.download = filename; document.body.appendChild(a); a.click(); document.body.removeChild(a);
           setTimeout(() => URL.revokeObjectURL(url), 60_000);
         };
         try {
-          const { data } = await api.get(`/alquileres/${id}/ticket`, { responseType: 'blob' });
-          openBlobInTab(data);
+          let blobResp;
+            if (response?.data?.pago?.idPago) {
+              blobResp = await api.get(`/comprobantes-electronicos/pago/${response.data.pago.idPago}/ticket?tipo=alquiler`, { responseType: 'blob' });
+            } else {
+              blobResp = await api.get(`/alquileres/${id}/ticket`, { responseType: 'blob' });
+            }
+            const { data } = blobResp;
+          openBlobDownload(data, `TICKET_${id}.pdf`);
         } catch (err) {
           try {
             const { data } = await api.get(`/boletas/${id}/pdf`, { responseType: 'blob' });

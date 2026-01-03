@@ -59,6 +59,44 @@ const ListaReservasRecientes = ({ actualizarLista, onEditarReserva, onVerDetalle
   const confirmarReserva = async (idReserva) => {
     try {
       const resp = await reservaService.confirmar(idReserva);
+      try {
+        const idAlq = resp?.alquiler?.idAlquiler || resp?.alquiler?.id || resp?.alquilerId;
+        if (idAlq) {
+          // Abrir ticket de ALQUILER generado (si backend aún no devuelve idPago, mantenemos boleta PDF como fallback)
+          try {
+            const apiCli = (await import('@/services/api')).default;
+            if (resp?.pago?.idPago) {
+              const t = await apiCli.get(`/comprobantes-electronicos/pago/${resp.pago.idPago}/ticket?tipo=alquiler`, { responseType: 'blob' });
+              const tUrl = URL.createObjectURL(new Blob([t.data], { type: 'application/pdf' }));
+              window.open(tUrl, '_blank');
+              setTimeout(() => URL.revokeObjectURL(tUrl), 60_000);
+            } else {
+              // Fallback: boleta PDF de alquiler
+              const pdf = await apiCli.get(`/boletas/${idAlq}/pdf`, { responseType: 'blob' });
+              const url = URL.createObjectURL(new Blob([pdf.data], { type: 'application/pdf' }));
+              window.open(url, '_blank');
+              setTimeout(() => URL.revokeObjectURL(url), 60_000);
+            }
+          } catch (e2) { console.warn('No se pudo abrir el ticket/boleta del nuevo alquiler', e2); }
+        }
+      } catch (e) { console.warn('No se pudo abrir documento del nuevo alquiler', e); } 
+      // Notificar a "Alquileres Recientes" para refrescar
+      try { window.dispatchEvent(new CustomEvent('refreshAlquileres')); } catch {}
+      try { localStorage.setItem('triggerRefreshAlquileres', String(Date.now())); } catch {}
+
+      // Abrir ticket de RESERVA si el backend entregó idPagoReserva
+      if (resp?.pagoReserva?.idPagoReserva) {
+        try {
+          const apiCli = (await import('../../../../services/api')).default;
+          const t = await apiCli.get(`/comprobantes-electronicos/pago-reserva/${resp.pagoReserva.idPagoReserva}/ticket?tipo=reserva`, { responseType: 'blob' });
+          const tUrl = URL.createObjectURL(new Blob([t.data], { type: 'application/pdf' }));
+          window.open(tUrl, '_blank');
+          setTimeout(() => URL.revokeObjectURL(tUrl), 60_000);
+        } catch (e) {
+          console.warn('Reserva confirmada, pero no se pudo abrir el ticket de reserva automáticamente:', e);
+        }
+      }
+
       // Si el backend devolvió el pago del alquiler, descargar comprobante PDF del pago del 100%
       if (resp && resp.pago && resp.pago.idPago) {
         try {
@@ -313,6 +351,33 @@ const ListaReservasRecientes = ({ actualizarLista, onEditarReserva, onVerDetalle
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                   <div className="flex items-center justify-end space-x-2">
+                        {/* Ver ticket (reserva) */}
+                        <button
+                          onClick={async () => {
+                            try {
+                              const api = (await import('../../../../services/api')).default;
+                              if (reserva.idPagoReserva) {
+                                const resp = await api.get(`/comprobantes-electronicos/pago-reserva/${reserva.idPagoReserva}/ticket?tipo=reserva`, { responseType: 'blob' });
+                                const url = URL.createObjectURL(new Blob([resp.data], { type: 'application/pdf' }));
+                                const a = document.createElement('a'); a.href = url; a.download = `TICKET_RESERVA_${reserva.idReserva}.pdf`; document.body.appendChild(a); a.click(); document.body.removeChild(a);
+                                setTimeout(() => URL.revokeObjectURL(url), 60_000);
+                              } else {
+                                // Fallback: boleta PDF de la reserva
+                                const resp = await api.get(`/comprobantes-pago-reserva/reserva/${reserva.idReserva}/pdf`, { responseType: 'blob' });
+                                const url = URL.createObjectURL(new Blob([resp.data], { type: 'application/pdf' }));
+                                const a = document.createElement('a'); a.href = url; a.download = `TICKET_RESERVA_${reserva.idReserva}.pdf`; document.body.appendChild(a); a.click(); document.body.removeChild(a);
+                                setTimeout(() => URL.revokeObjectURL(url), 60_000);
+                              }
+                            } catch (e) {
+                              console.warn('No se pudo abrir el ticket/boleta de la reserva', e);
+                              alert('No se pudo descargar el ticket/boleta.');
+                            }
+                          }}
+                          className="inline-flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg bg-blue-600 hover:bg-blue-700 text-white"
+                          title="Ver ticket"
+                        >
+                          Ver ticket
+                        </button>
                     {/* Botón "Ver más" con menú */}
                     <div className="relative inline-block text-left">
                       <button
